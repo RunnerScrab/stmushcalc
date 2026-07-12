@@ -1,0 +1,21 @@
+# Rust build output
+/target
+
+# wasm build artifact — regenerate with shipdb-wasm/build.sh
+/shipdb-wasm/pkg
+
+# local editor/tool state
+.claude/settings.local.json
+
+# backups
+*.bak
+
+# generated CLI plot images (root only)
+/*.png
+/*.svg
+
+# wasm-bindgen type declarations (never fetched at runtime)
+/docs/*.d.ts
+
+# local dev build script (not part of the deployed site)
+/shipdb-wasm/build.sh

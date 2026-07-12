@@ -1,0 +1,4 @@
+[net]
+# Fetch git dependencies via the git CLI so SSH-agent auth works for the
+# private RunnerScrab repos (mirrors ~/Code/telnet-rs/.cargo/config.toml).
+git-fetch-with-cli = true
