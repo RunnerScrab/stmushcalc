@@ -114,11 +114,11 @@
 <div class="lists">
   <div class="list-col">
     <div class="list-head">
-      <button type="button" id="loadbtn">Load @listspecs log(s)</button>
+      <button type="button" id="loadbtn">&#128194; Load @listspecs log(s)</button>
       <input type="file" id="logfiles" accept=".log,.txt,text/plain" multiple hidden>
       <small class="drag-hint-text">(You can also drag the file(s) onto the page)</small>
       <span id="shipcounts" class="ship-counts"></span>
-      <button type="button" id="clearloaded">Clear cached ships</button>
+      <button type="button" id="clearloaded">&#128465; Clear cached ships</button>
     </div>
     <select id="available" multiple size="12" aria-label="Available ships"></select>
   </div>
@@ -159,7 +159,7 @@
 <div id="status" class="sr-only" aria-live="polite"></div>
 
 <script type="module">
-  import init, { list_ships, ship_art, simulate_summary, ship_table, render_instantaneous, render_cumulative, add_ships_from_log, export_uploaded, import_uploaded, ship_counts } from "./shipdb_wasm.js";
+  import init, { list_ships, ship_art, simulate_summary, ship_table, render_instantaneous, render_cumulative, add_ships_from_log, export_uploaded, import_uploaded, ship_counts } from "../pkg/shipdb_wasm.js";
 
   await init();
 
@@ -410,7 +410,7 @@
     addTables(body, collapsible("Beams and Missiles", parsed.querySelector(".weapons-cols"), false));
   }
 
-  // Full rebuild: use when the set of selected ships changes.
+  // Full rebuild: use when the set of selected ships changes
   function run() {
     const names = currentNames();
     plots.innerHTML = "";
@@ -439,7 +439,7 @@
   }
 
   // In-place update: use when only tuning/timing changes, so the user's dragged
-  // panel order, sizes, and collapse state survive.
+  // panel order, sizes, and collapse state survive
   function refresh() {
     const parts = [];
     for (const panel of plots.querySelectorAll(".panel[data-ship]")) {
@@ -508,7 +508,7 @@
 
   const validNames = new Set(shipNames);
 
-  // Restore ships, tuning, and timing from the URL query string (?s=...&eng=...&timing=...).
+  // Load state from URL string
   function applyStateFromUrl() {
     const p = new URLSearchParams(location.search);
     for (const id of TUNING) {
@@ -523,7 +523,7 @@
     }
   }
 
-  // Reflect the current state into the URL so it can be copied and shared.
+  // Reflect the current state into the URL
   function updateUrl() {
     const p = new URLSearchParams();
     for (const name of currentNames()) p.append("s", name);
@@ -540,14 +540,16 @@
 </script>
 
 <footer class="notes">
-  <p><span class="fn">*</span> Turning takes time, depending on the MoveRatio of the ship. It takes twice as long to turn to an opposite face (e.g. F to A) than it does to turn to an adjacent face (e.g. F to S). Each face has 4 adjacent faces and 1 opposite face.</p>
+    <p><span class="fn">*</span> Turning takes time, depending on the MoveRatio of the ship. It takes twice as long to turn to an opposite face (e.g. F to A) than it does to turn to an adjacent face (e.g. F to S). Each face has 4 adjacent faces and 1 opposite face. <u>Both models assume a stationary target.</u></p>
   <ul>
     <li><strong>Reactive</strong> simulates only turning toward an arc once it has become ready to fire, which reduces DPS. This is more representative of combat when you are turning to evade and/or to distribute incoming damage across shield facings, and do not have arc timing assistance from a tool.</li>
     <li><strong>Anticipatory</strong> simulates turning at exactly the right time before the next ready arc recycles, so that it can be fired the instant the turn is complete. This better captures combat where all you care about is doing damage, or if you are using some kind of timer aid to know exactly when your arcs are going to recycle.</li>
   </ul>
   <p>The initial volleys following the first arc at the start of the fight will incur turn delays regardless of model, since all arcs are presumed to start ready.</p>
+  <p>Turning <i>while at warp</i> maybe be completely different and I have not yet measured it.</p>
+  
   <br>
-  <p><i>Credit goes to PoF mar'Qon for making the ship spreadsheet, which provided many of the equations used by this calculator</i></p>
+  <p><i>Credit goes to PoF mar'Qon for making the ship spreadsheet, which provided most of the equations used by this calculator</i></p>
 </footer>
 </body>
 </html>
