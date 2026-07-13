@@ -7,17 +7,38 @@
   :root { color-scheme: dark; }
   *, *::before, *::after { box-sizing: border-box; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  body.dragging-file::after {
+    content: "Drop a log file to load ships";
+    position: fixed; inset: 0; z-index: 1000; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(24, 24, 27, 0.85); color: #dcdce1;
+    font-size: 1.5rem; border: 3px dashed #6a8cff;
+  }
   body {
     font-family: sans-serif; max-width: 1900px; margin: 2rem auto; padding: 0 1.5rem;
     background: #18181b; color: #dcdce1;
   }
   label { display: inline-block; width: 5rem; }
-  .tuning { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin: 1rem 0; }
+  .control-panel { width: fit-content; max-width: 100%; border: 1px solid #3a3a40; border-radius: 4px; background: #1d1d20; padding: 0.75rem 1rem; margin: 1rem 0; }
+  .control-panel-title { margin: 0 0 0.5rem; font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #9a9aa2; }
+  .control-panel-note { margin: 0 0 0.6rem; padding-left: 1.2rem; max-width: 40rem; font-size: 0.8rem; line-height: 1.4; color: #9a9aa2; }
+  .control-panel-note li { margin: 0.1rem 0; }
+  .control-panel .controls { margin: 0.75rem 0 0; }
+  .tuning { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; margin: 0; padding-top: 0.6rem; border-top: 1px solid #3a3a40; }
+  .tuning > div { display: flex; align-items: center; gap: 0.35rem; }
+  .tuning label { width: auto; margin: 0; font-size: 0.85rem; color: #9a9aa2; }
+  .tuning input { width: 4rem; }
   .controls { margin: 0.5rem 0 1rem; }
   .controls label { width: auto; margin-right: 0.5rem; }
-  .lists { display: flex; align-items: center; gap: 0.5rem; }
-  .lists select { flex: 1; }
-  .lists .buttons { display: flex; flex-direction: column; gap: 0.5rem; }
+  .lists { display: flex; align-items: flex-end; gap: 0.5rem; }
+  .lists > .list-col, .lists > select { flex: 1; }
+  .list-col { display: flex; flex-direction: column; }
+  .list-col select { width: 100%; }
+  .lists .buttons { align-self: center; display: flex; flex-direction: column; gap: 0.5rem; }
+  .list-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.25rem; font-size: 0.8rem; }
+  .list-head .ship-counts { margin-left: auto; }
+  .list-head button { font: inherit; }
+  .ship-counts { color: #9a9aa2; }
   select, input, button {
     background: #232327; color: #dcdce1; border: 1px solid #3a3a40;
   }
@@ -25,7 +46,7 @@
   button:hover { background: #2c2c31; }
   canvas { display: block; background: #18181b; }
   .summary { font-family: monospace; white-space: pre-wrap; margin: 0 0 0.5rem; font-size: 0.72rem; align-self: stretch; text-align: center; }
-  .art { font-family: monospace; white-space: pre; font-size: 0.45rem; line-height: 1; margin: 0 0 0.5rem; color: #b8b8c0; overflow-x: auto; overflow-y: hidden; max-width: 100%; cursor: default; }
+  .art { font-family: monospace; white-space: pre; font-size: 0.45rem; line-height: 1; margin: 0 0 0.5rem; padding-bottom: 1rem; color: #b8b8c0; overflow-x: auto; overflow-y: hidden; max-width: 100%; cursor: default; }
   .ship-tables { width: 100%; font-size: 0.85rem; container-type: inline-size; }
 
   .ship-general { width: 100%; }
@@ -91,7 +112,16 @@
 <h1>STMush Ship Calculator</h1>
 
 <div class="lists">
-  <select id="available" multiple size="12" aria-label="Available ships"></select>
+  <div class="list-col">
+    <div class="list-head">
+      <button type="button" id="loadbtn">Load @listspecs log(s)</button>
+      <input type="file" id="logfiles" accept=".log,.txt,text/plain" multiple hidden>
+      <small class="drag-hint-text">(You can also drag the file(s) onto the page)</small>
+      <span id="shipcounts" class="ship-counts"></span>
+      <button type="button" id="clearloaded">Clear cached ships</button>
+    </div>
+    <select id="available" multiple size="12" aria-label="Available ships"></select>
+  </div>
   <div class="buttons">
     <button id="add">Add <span aria-hidden="true">&rarr;</span></button>
     <button id="remove"><span aria-hidden="true">&larr;</span> Remove</button>
@@ -99,23 +129,29 @@
   <select id="selected" multiple size="12" aria-label="Selected ships"></select>
 </div>
 
-<div class="tuning">
-  <div><label for="eng">Eng</label><input id="eng" type="number" value="0"></div>
-  <div><label for="tac">Tac</label><input id="tac" type="number" value="0"></div>
-  <div><label for="helm">Helm</label><input id="helm" type="number" value="0"></div>
-  <div><label for="oper">Oper</label><input id="oper" type="number" value="0"></div>
-  <div><label for="sci">Sci</label><input id="sci" type="number" value="0"></div>
-  <div><label for="dam">Dam</label><input id="dam" type="number" value="0"></div>
-  <div><label for="wis">Wis</label><input id="wis" type="number" value="10"></div>
-</div>
-
-<div class="controls">
-  <label for="timing">Turning model*</label>
-  <select id="timing">
-    <option value="reactive" selected>Reactive (turn to fire arc when it has recycled)</option>
-    <option value="anticipatory">Anticipatory (turn to next ready arc before it recycles)</option>
-  </select>
-</div>
+<section class="control-panel" aria-label="Crew tuning and turning model">
+  <h2 class="control-panel-title">Character</h2>
+  <ul class="control-panel-note">
+    <li>Eng, Tac, Helm, Opr, Sci, and Dam are your console skills</li>
+    <li>Wis is your wisdom score as displayed in <code>sheet</code>, with gear</li>
+  </ul>
+  <div class="tuning">
+    <div><label for="eng">Eng</label><input id="eng" type="number" value="0"></div>
+    <div><label for="tac">Tac</label><input id="tac" type="number" value="0"></div>
+    <div><label for="helm">Helm</label><input id="helm" type="number" value="0"></div>
+    <div><label for="oper">Opr</label><input id="oper" type="number" value="0"></div>
+    <div><label for="sci">Sci</label><input id="sci" type="number" value="0"></div>
+    <div><label for="dam">Dam</label><input id="dam" type="number" value="0"></div>
+    <div><label for="wis">Wis</label><input id="wis" type="number" value="10"></div>
+  </div>
+  <div class="controls">
+    <label for="timing">Turning model*</label>
+    <select id="timing">
+      <option value="reactive" selected>Reactive (turn to fire arc when it has recycled)</option>
+      <option value="anticipatory">Anticipatory (turn to next ready arc before it recycles)</option>
+    </select>
+  </div>
+</section>
 
 <p><span class="stat-above">▲</span> indicates a marked spec is better than average across all selected ships, <span class="stat-below">▼</span> indicates worse. For two ships, this is equivalent to indicating which has the better/worse spec.</p>
 
@@ -123,18 +159,89 @@
 <div id="status" class="sr-only" aria-live="polite"></div>
 
 <script type="module">
-  import init, { list_ships, ship_art, simulate_summary, ship_table, render_instantaneous, render_cumulative } from "./shipdb_wasm.js";
+  import init, { list_ships, ship_art, simulate_summary, ship_table, render_instantaneous, render_cumulative, add_ships_from_log, export_uploaded, import_uploaded, ship_counts } from "./shipdb_wasm.js";
 
   await init();
 
+  const STORAGE_KEY = "shipdb.uploaded";
+  const bytesToB64 = bytes => {
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000)
+      bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  };
+  const b64ToBytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  function persistUploaded() {
+    try {
+      const bytes = export_uploaded();
+      if (bytes.length) localStorage.setItem(STORAGE_KEY, bytesToB64(bytes));
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch (e) { console.warn("Couldn't cache loaded ships", e); }
+  }
+  function restoreUploaded() {
+    try {
+      const b64 = localStorage.getItem(STORAGE_KEY);
+      if (b64) import_uploaded(b64ToBytes(b64));
+    } catch (e) { console.warn("Couldn't restore cached ships", e); }
+  }
+  restoreUploaded();
+
   const available = document.getElementById("available");
   const selected = document.getElementById("selected");
-  const shipNames = list_ships();
-  for (const name of shipNames) {
-    const opt = document.createElement("option");
-    opt.textContent = name;
-    available.appendChild(opt);
+  function populateAvailable(names = list_ships()) {
+    available.innerHTML = "";
+    for (const name of names) {
+      const opt = document.createElement("option");
+      opt.textContent = name;
+      available.appendChild(opt);
+    }
   }
+  const shipCounts = document.getElementById("shipcounts");
+  function updateCounts() {
+    const [builtin, local] = ship_counts();
+    shipCounts.textContent = `${builtin} ships built-in - ${local} ships cached locally`;
+  }
+  const shipNames = list_ships();
+  populateAvailable(shipNames);
+  updateCounts();
+
+  async function ingestFiles(files) {
+    if (!files.length) return;
+    let added = 0;
+    for (const file of files) added += add_ships_from_log(await file.text()).length;
+    if (added) persistUploaded();
+    populateAvailable();
+    updateCounts();
+    status.textContent = `Loaded ${added} ship${plur(added)} from ${files.length} file${plur(files.length)}.`;
+  }
+
+  const logfiles = document.getElementById("logfiles");
+  document.getElementById("loadbtn").addEventListener("click", () => logfiles.click());
+  logfiles.addEventListener("change", e => {
+    ingestFiles(e.target.files);
+    e.target.value = "";
+  });
+
+  document.getElementById("clearloaded").addEventListener("click", () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+    location.reload();
+  });
+
+  const isFileDrag = e => e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+  window.addEventListener("dragover", e => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    document.body.classList.add("dragging-file");
+  });
+  window.addEventListener("dragleave", e => {
+    if (!e.relatedTarget) document.body.classList.remove("dragging-file");
+  });
+  window.addEventListener("drop", e => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    document.body.classList.remove("dragging-file");
+    ingestFiles(e.dataTransfer.files);
+  });
 
   function addShip(name) {
     if (Array.from(selected.options).some(o => o.value === name)) return;
@@ -164,12 +271,18 @@
   document.getElementById("add").addEventListener("click", addSelected);
   document.getElementById("remove").addEventListener("click", removeSelected);
 
+  const plur = n => (n === 1 ? "" : "s");
   const field = id => Number(document.getElementById(id).value);
   const TUNING = ["eng", "tac", "helm", "oper", "sci", "dam", "wis"];
   const currentArgs = () => TUNING.map(field);
   const currentTiming = () => document.getElementById("timing").value;
   const withTiming = () => [...currentArgs(), currentTiming()];
   const currentNames = () => Array.from(selected.options).map(o => o.value);
+  const parseTable = name => {
+    const div = document.createElement("div");
+    div.innerHTML = ship_table(name, ...currentArgs());
+    return div;
+  };
   const plots = document.getElementById("plots");
   const status = document.getElementById("status");
   let canvasCount = 0;
@@ -282,8 +395,7 @@
       body.appendChild(pre);
     }
 
-    const parsed = document.createElement("div");
-    parsed.innerHTML = ship_table(name, ...currentArgs());
+    const parsed = parseTable(name);
 
     addTables(body, collapsible("General", parsed.querySelector(".ship-general")));
     addTables(body, parsed.querySelector(".weapons-summary"));
@@ -298,7 +410,7 @@
     addTables(body, collapsible("Beams and Missiles", parsed.querySelector(".weapons-cols"), false));
   }
 
-  // Full rebuild: use when the set of selected ships changes
+  // Full rebuild: use when the set of selected ships changes.
   function run() {
     const names = currentNames();
     plots.innerHTML = "";
@@ -323,17 +435,17 @@
     }
 
     colorRelative();
-    status.textContent = `Showing ${names.length} ship${names.length === 1 ? "" : "s"}: ${names.join(", ")}.`;
+    status.textContent = `Showing ${names.length} ship${plur(names.length)}: ${names.join(", ")}.`;
   }
 
-  // In-place update
+  // In-place update: use when only tuning/timing changes, so the user's dragged
+  // panel order, sizes, and collapse state survive.
   function refresh() {
     const parts = [];
     for (const panel of plots.querySelectorAll(".panel[data-ship]")) {
       const name = panel.dataset.ship;
       panel.querySelector(".summary").innerHTML = simulate_summary(name, ...withTiming());
-      const parsed = document.createElement("div");
-      parsed.innerHTML = ship_table(name, ...currentArgs());
+      const parsed = parseTable(name);
       for (const sel of [".ship-general", ".weapons-summary", ".weapons-cols"]) {
         panel.querySelector(sel).replaceWith(parsed.querySelector(sel));
       }
@@ -396,7 +508,7 @@
 
   const validNames = new Set(shipNames);
 
-  // Restore calculator state from the URL query string
+  // Restore ships, tuning, and timing from the URL query string (?s=...&eng=...&timing=...).
   function applyStateFromUrl() {
     const p = new URLSearchParams(location.search);
     for (const id of TUNING) {
@@ -411,7 +523,7 @@
     }
   }
 
-  // Reflect the current state into the URL
+  // Reflect the current state into the URL so it can be copied and shared.
   function updateUrl() {
     const p = new URLSearchParams();
     for (const name of currentNames()) p.append("s", name);

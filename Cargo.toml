@@ -23,7 +23,8 @@ required-features = ["cli"]
 [features]
 default = ["cli"]
 plot = ["dep:plotters", "dep:realfft", "dep:fxhash"]
-cli = ["plot", "dep:rusqlite", "dep:rayon", "dep:compact_str"]
+parse = ["dep:regex-lite"]
+cli = ["plot", "parse", "dep:rusqlite", "dep:rayon", "dep:compact_str"]
 
 [dependencies]
 rusqlite = { version = "0.33", default-features = false, optional = true }
@@ -33,6 +34,8 @@ smallvec = { version = "1.15.2" }
 compact_str = { version = "0.9.1", optional = true }
 fxhash = { version = "0.2.1", optional = true }
 rayon = { version = "1", optional = true }
+regex-lite = { version = "0.1", optional = true }
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
 realfft = { version = "3.5.0", optional = true }
+memchr = "2.8.3"

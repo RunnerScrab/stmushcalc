@@ -42,14 +42,29 @@ fn ship_names_lower() -> &'static [String] {
     NAMES.get_or_init(|| ships().iter().map(|s| s.name.to_lowercase()).collect())
 }
 
+thread_local! {
+    // Ships scraped from user-uploaded logs this session. Art is stored in a side table
+    static UPLOADED: RefCell<Vec<&'static Ship>> = const { RefCell::new(Vec::new()) };
+    static UPLOADED_ART: RefCell<HashMap<i64, String>> = RefCell::new(HashMap::new());
+}
+
 #[inline]
 fn find_ship(name: &str) -> Option<&'static Ship> {
     let needle = name.to_lowercase();
-    ships()
+    if let Some(ship) = ships()
         .iter()
         .zip(ship_names_lower())
         .find(|(_, lower)| lower.contains(&needle))
         .map(|(ship, _)| ship)
+    {
+        return Some(ship);
+    }
+    UPLOADED.with(|u| {
+        u.borrow()
+            .iter()
+            .find(|s| s.name.to_lowercase().contains(&needle))
+            .copied()
+    })
 }
 
 #[inline]
@@ -140,6 +155,7 @@ pub fn init() {
 #[wasm_bindgen]
 pub fn list_ships() -> Vec<String> {
     let mut names: Vec<String> = ships().iter().map(|s| s.name.clone()).collect();
+    UPLOADED.with(|u| names.extend(u.borrow().iter().map(|s| s.name.clone())));
     names.sort_by_key(|n| n.to_lowercase());
     names
 }
@@ -147,7 +163,69 @@ pub fn list_ships() -> Vec<String> {
 #[wasm_bindgen]
 pub fn ship_art(name: &str) -> Result<String, JsValue> {
     let ship = find_ship_or_err(name)?;
-    Ok(catalog().1.get(&ship.dbref).cloned().unwrap_or_default())
+    if let Some(a) = catalog().1.get(&ship.dbref) {
+        return Ok(a.clone());
+    }
+    Ok(UPLOADED_ART.with(|m| m.borrow().get(&ship.dbref).cloned()).unwrap_or_default())
+}
+
+fn add_ships(incoming: impl IntoIterator<Item = Ship>) -> Vec<String> {
+    let mut added = Vec::new();
+    for mut s in incoming {
+        // the embedded catalog is immutable, so it wins on dbref collisions
+        if ships().iter().any(|e| e.dbref == s.dbref) {
+            continue;
+        }
+        let dbref = s.dbref;
+        if let Some(a) = s.art.take() {
+            UPLOADED_ART.with(|m| m.borrow_mut().insert(dbref, a));
+        }
+        let leaked: &'static Ship = Box::leak(Box::new(s));
+        UPLOADED.with(|u| {
+            let mut u = u.borrow_mut();
+            match u.iter_mut().find(|e| e.dbref == dbref) {
+                Some(slot) => *slot = leaked, // replace a re-uploaded ship
+                None => u.push(leaked),
+            }
+        });
+        added.push(leaked.name.clone());
+    }
+    added
+}
+
+/// Scrape @listspecs output from loaded logs and cache them locally
+#[wasm_bindgen]
+pub fn add_ships_from_log(text: &str) -> Vec<String> {
+    add_ships(shipdb::logparse::parse_logs(text, false))
+}
+
+/// Bincode snapshot of this session's uploaded ships, art re-attached
+#[wasm_bindgen]
+pub fn export_uploaded() -> Vec<u8> {
+    let ships: Vec<Ship> = UPLOADED.with(|u| {
+        u.borrow()
+            .iter()
+            .map(|&s| {
+                let mut ship = s.clone();
+                ship.art = UPLOADED_ART.with(|m| m.borrow().get(&s.dbref).cloned());
+                ship
+            })
+            .collect()
+    });
+    shipdb::ships_to_bytes(&ships).unwrap_or_default()
+}
+
+/// Re-add ships from a prior export_uploaded blob. Returns the names added
+#[wasm_bindgen]
+pub fn import_uploaded(bytes: &[u8]) -> Vec<String> {
+    shipdb::ships_from_bytes(bytes).map(add_ships).unwrap_or_default()
+}
+
+/// Returns ships loaded from logs this session
+#[wasm_bindgen]
+pub fn ship_counts() -> Vec<u32> {
+    let uploaded = UPLOADED.with(|u| u.borrow().len()) as u32;
+    vec![ships().len() as u32, uploaded]
 }
 
 #[wasm_bindgen]
@@ -205,7 +283,7 @@ pub fn ship_table(
     let missile_dps: f64 = tuned.weapons_of(&WeaponType::Missile).map(|w| w.dps).sum();
 
     // Thousands-separated integer
-    fn commafy(n: i64) -> String {
+    fn add_commas(n: i64) -> String {
         let neg = n < 0;
         let digits = n.unsigned_abs().to_string();
         let len = digits.len();
@@ -257,15 +335,15 @@ pub fn ship_table(
             + &stat("Type", &tuned.ship_type)
             + &stat("Crew", &num("crew", tuned.crew, &format!("{:.0}", tuned.crew)))
             + &stat("Quota", &num("quota", tuned.quota as f64, &tuned.quota.to_string()))
-            + &stat("Cost", &commafy(tuned.cost))),
+            + &stat("Cost", &add_commas(tuned.cost))),
     ));
 
     stats.push_str(&group(
         "Hull",
         &(stat("Superstructure", &num("structure", tuned.structure, &format!("{:.0}", tuned.structure)))
             + &stat("Repair", &num("repair", tuned.repair, &format!("{:.0}", tuned.repair)))
-            + &stat("Mass", &commafy(tuned.mass))
-            + &stat("Bay", &num("bay", tuned.bay as f64, &commafy(tuned.bay)))
+            + &stat("Mass", &add_commas(tuned.mass))
+            + &stat("Bay", &num("bay", tuned.bay as f64, &add_commas(tuned.bay)))
             + &stat("Cargo", &num("cargo", tuned.cargo as f64, &tuned.cargo.to_string()))),
     ));
 
@@ -331,6 +409,7 @@ pub fn ship_table(
                         Some(x) => num(key, x, &format!("{x:.2}")),
                         None => "—".to_string(),
                     };
+
                     c += &stat(
                         "w/ TWD",
                         &format!(
@@ -338,6 +417,26 @@ pub fn ship_table(
                             f("twd_cruise", pc),
                             f("twd_emer", pe),
                             num("twd_max", pm, &format!("{pm:.2}"))
+                        ),
+                    );
+                    let fc = |key: &str, v: Option<f64>| match v {
+                        Some(x) => lo(key, x, &format!("{x:.1}")),
+                        None => "—".to_string(),
+                    };
+
+                    // TWD cost = 0.1 * MR * TWDSpeed^2 
+                    let twd_cost = |cost: Option<f64>, base: Option<f64>, twd: Option<f64>| -> Option<f64> {
+                        let (_cost, base, twd) = (cost?, base?, twd?);
+                        (base > 0.0).then(|| 0.1 * tuned.move_ratio * twd.powi(2))
+                    };
+
+                    c += &stat(
+                        "TWD cost",
+                        &format!(
+                            "{} / {} / {}",
+                            fc("twd_cruise_cost", twd_cost(tuned.warp_cruise_cost, ship.warp_cruise, pc)),
+                            fc("twd_emer_cost", twd_cost(tuned.warp_emer_cost, ship.warp_emer, pe)),
+                            fc("twd_max_cost", twd_cost(tuned.warp_max_cost, ship.warp_max, Some(pm)))
                         ),
                     );
                 }
