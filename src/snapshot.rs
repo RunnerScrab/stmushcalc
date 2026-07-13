@@ -22,9 +22,12 @@ pub fn load_snapshot(path: impl AsRef<Path>) -> Result<Vec<Ship>> {
         .with_context(|| format!("decoding snapshot from {}", path.display()))
 }
 
-// No filesystem access, so this works wherever bincode compiles (including wasm)
 pub fn ships_from_bytes(bytes: &[u8]) -> Result<Vec<Ship>> {
     bincode::deserialize(bytes).context("decoding snapshot bytes")
+}
+
+pub fn ships_to_bytes(ships: &[Ship]) -> Result<Vec<u8>> {
+    bincode::serialize(ships).context("encoding snapshot bytes")
 }
 
 #[cfg(all(test, feature = "cli"))]

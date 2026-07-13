@@ -2,6 +2,8 @@ mod character;
 mod combat;
 #[cfg(feature = "cli")]
 mod db;
+#[cfg(feature = "parse")]
+pub mod logparse;
 #[cfg(feature = "plot")]
 pub mod plot;
 mod rng;
@@ -15,7 +17,7 @@ pub use combat::{simulate_damage, DamageSignal, Face, Fire, SimConfig, TurnTimin
 pub use db::{load_ships, open};
 pub use rng::TurnRng;
 pub use ship::Ship;
-pub use snapshot::{load_snapshot, save_snapshot, ships_from_bytes};
+pub use snapshot::{load_snapshot, save_snapshot, ships_from_bytes, ships_to_bytes};
 pub use weapon::{Weapon, WeaponType};
 
 /// Default simulation horizon, in seconds
