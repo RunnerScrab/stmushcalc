@@ -196,7 +196,7 @@ fn add_ships(incoming: impl IntoIterator<Item = Ship>) -> Vec<String> {
 /// Scrape @listspecs output from loaded logs and cache them locally
 #[wasm_bindgen]
 pub fn add_ships_from_log(text: &str) -> Vec<String> {
-    add_ships(shipdb::logparse::parse_logs(text, false))
+    add_ships(shipdb::logparse::parse_logs(text))
 }
 
 /// Bincode snapshot of this session's uploaded ships, art re-attached
@@ -245,7 +245,7 @@ pub fn simulate_summary(
     let ch = Character::new(eng, tac, helm, oper, sci, dam, wis);
     let sig = run(ship, ch, parse_timing(timing));
     let rotation: String = sig.rotation.iter().map(|f| f.label()).collect();
-    let total = sig.cumulative.last().copied().unwrap_or(0.0);
+    let total = sig.total;
     let dps = total / HORIZON_SECS;
     let turn = sig.turn_time_total;
     Ok(format!(

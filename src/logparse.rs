@@ -21,53 +21,50 @@ static WEAPON_ROW_RE: LazyLock<Regex> =
 static ART_END_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*(Class|SensorClass|Type|Structure):").unwrap());
 
-#[derive(Copy, Clone)]
-enum LabelType {
-    ONEXCOST = 0,
-    BAY,
-    CLASS,
-    CLOAK,
-    COST,
-    DEFENSE,
-    FIRING,
-    HASLAND,
-    IMPCRUISE,
-    LRS,
-    MAIN,
-    MAINMAX,
-    MOVERATIO,
-    SENSORCLASS,
-    SHIELDMAX,
-    STRUCTURE,
-    TRANS,
-    TYPE,
-    WARPTYPE,
-    WARPCRUISE,
+mod label_type {
+    pub(crate) const ONEXCOST: usize = 0;
+    pub(crate) const BAY: usize = 1;
+    pub(crate) const CLASS: usize = 2;
+    pub(crate) const CLOAK: usize = 3;
+    pub(crate) const COST: usize = 4;
+    pub(crate) const DEFENSE: usize = 5;
+    pub(crate) const FIRING: usize = 6;
+    pub(crate) const HASLAND: usize = 7;
+    pub(crate) const IMPCRUISE: usize = 8;
+    pub(crate) const LRS: usize = 9;
+    pub(crate) const MAIN: usize = 10;
+    pub(crate) const MAINMAX: usize = 11;
+    pub(crate) const MOVERATIO: usize = 12;
+    pub(crate) const SENSORCLASS: usize = 13;
+    pub(crate) const SHIELDMAX: usize = 14;
+    pub(crate) const STRUCTURE: usize = 15;
+    pub(crate) const TRANS: usize = 16;
+    pub(crate) const TYPE: usize = 17;
+    pub(crate) const WARPTYPE: usize = 18;
+    pub(crate) const WARPCRUISE: usize = 19;
 }
 
-// Annoyingly, in Rust, to cast a usize (binary_search result) to an enum
-// you need std::mem::transmute 
-static SPEC_LABELS: [(&str, LabelType); 20] = [ 
-     ("1x Cost", LabelType::ONEXCOST),
-     ("Bay", LabelType::BAY),
-     ("Class", LabelType::CLASS),
-     ("Cloak", LabelType::CLOAK),
-     ("Cost",  LabelType::COST),
-     ("Defense", LabelType::DEFENSE),
-     ("Firing", LabelType::FIRING),
-     ("HasLand", LabelType::HASLAND),
-     ("ImpCruise", LabelType::IMPCRUISE),
-     ("LRS", LabelType::LRS),
-     ("Main", LabelType::MAIN),
-     ("MainMax", LabelType::MAINMAX),
-     ("MoveRatio", LabelType::MOVERATIO),
-     ("SensorClass", LabelType::SENSORCLASS),
-     ("ShieldMax", LabelType::SHIELDMAX),
-     ("Structure", LabelType::STRUCTURE),
-     ("Trans", LabelType::TRANS),
-     ("Type", LabelType::TYPE),
-     ("Warp Type", LabelType::WARPTYPE),
-     ("WarpCruise", LabelType::WARPCRUISE),
+static SPEC_LABELS: [&str; 20] = [ 
+     "1x Cost",
+     "Bay",
+     "Class",
+     "Cloak",
+     "Cost",
+     "Defense",
+     "Firing",
+     "HasLand",
+     "ImpCruise",
+     "LRS",
+     "Main",
+     "MainMax",
+     "MoveRatio",
+     "SensorClass",
+     "ShieldMax",
+     "Structure",
+     "Trans",
+     "Type",
+     "Warp Type",
+     "WarpCruise",
 ];
 
 #[derive(Clone, Copy)]
@@ -218,10 +215,7 @@ impl ShipSpecBlock {
     }
 
     fn parse_line(&mut self, line: &str) {
-        // Using RegexSet would be more readable and efficient, but the full Regex crate is a big
-        // dependency for browser downloaded WASM code to have, and I don't want to hand-roll a
-        // byte-level FSM for this
-
+        
         if self.has_art {
             let s = line.trim();
             if !s.is_empty() && s.chars().all(|c| c == '~') {
@@ -288,61 +282,58 @@ impl ShipSpecBlock {
 
         let label = memchr(b':', line.as_bytes()).map_or("", |i| line[..i].trim());
         
-        // A linear search would likely be faster if we were running compiled machine code, but I am
-        // unfamiliar with WASM's performance characteristics, so a binary search for now
-        if let Ok(idx) = &SPEC_LABELS.binary_search_by_key(&label, |&(a, _)| a) {
-            let matcharm = &SPEC_LABELS[*idx].1; 
-            match matcharm {
-                LabelType::CLASS => {
+        if let Ok(idx) = &SPEC_LABELS.binary_search(&label) {
+            match *idx {
+                label_type::CLASS => {
                     self.class = string_after_label(line, "Class");
                     self.crew = float_after_label(line, "Crew");
                     self.crew_tuned = line.contains("(tuned)");
                 }
-                LabelType::SENSORCLASS => {
+                label_type::SENSORCLASS => {
                     self.sensor_class = string_after_label(line, "SensorClass");
                     self.quota = int_after_label(line, "Quota");
                 }
-                LabelType::TYPE => {
+                label_type::TYPE => {
                     self.ship_type = string_after_label(line, "Type")
                         .and_then(|s| s.split_whitespace().next().map(str::to_string));
                     self.cost = int_after_label(line, "Cost");
                 }
-                LabelType::STRUCTURE => {
+                label_type::STRUCTURE => {
                     self.structure = float_after_label(line, "Structure");
                     self.repair = float_after_label(line, "Repair");
                     self.mass = int_after_label(line, "Mass");
                 }
-                LabelType::BAY => {
+                label_type::BAY => {
                     self.bay = int_after_label(line, "Bay");
                     self.cargo = int_after_label(line, "Cargo");
                 }
-                LabelType::HASLAND => {
+                label_type::HASLAND => {
                     self.has_land = bool_after_label(line, "HasLand");
                     self.has_dock = bool_after_label(line, "HasDock");
                     self.can_land = bool_after_label(line, "CanLand");
                     self.can_dock = bool_after_label(line, "CanDock");
                 }
-                LabelType::FIRING => {
+                label_type::FIRING => {
                     self.firing = float_after_label(line, "Firing");
                     self.fuel_eff = float_after_label(line, "FuelEff");
                     self.stealth = float_after_label(line, "Stealth");
                 }
-                LabelType::CLOAK => {
+                label_type::CLOAK => {
                     self.cloak_eff = float_after_label(line, "Cloak");
                     self.sensors = float_after_label(line, "Sensors");
                     self.aux_max = float_after_label(line, "AuxMax");
                 }
-                LabelType::MAINMAX => {
+                label_type::MAINMAX => {
                     self.main_max = float_after_label(line, "MainMax");
                     self.armor = float_after_label(line, "Armor");
                     self.fuel_max = float_after_label(line, "FuelMax");
                 }
-                LabelType::LRS => {
+                label_type::LRS => {
                     self.lrs = bool_after_label(line, "LRS");
                     self.srs = bool_after_label(line, "SRS");
                     self.ew = bool_after_label(line, "EW");
                 }
-                LabelType::TRANS => {
+                label_type::TRANS => {
                     self.trans = bool_after_label(line, "Trans");
                     self.tractor = bool_after_label(line, "Tractor");
 
@@ -355,26 +346,26 @@ impl ShipSpecBlock {
                         self.cloak = Some(cv);
                     }
                 }
-                LabelType::MAIN => {
+                label_type::MAIN => {
                     self.main = float_after_label(line, "Main");
                     self.aux = float_after_label(line, "Aux");
                     self.batt = float_after_label(line, "Batt");
                 }
-                LabelType::MOVERATIO => self.move_ratio = float_after_label(line, "MoveRatio"),
-                LabelType::WARPCRUISE => {
+                label_type::MOVERATIO => self.move_ratio = float_after_label(line, "MoveRatio"),
+                label_type::WARPCRUISE => {
                     self.warp_cruise = float_after_label(line, "WarpCruise");
                     self.warp_emer = float_after_label(line, "WarpEmer");
                     self.warp_max = float_after_label(line, "WarpMax");
                     self.expect_cost = Some(ExpectCost::Warp);
                 }
-                LabelType::IMPCRUISE => {
+                label_type::IMPCRUISE => {
                     self.imp_cruise = float_after_label(line, "ImpCruise");
                     self.imp_emer = float_after_label(line, "ImpEmer");
                     self.imp_max = float_after_label(line, "ImpMax");
                     self.expect_cost = Some(ExpectCost::Imp);
                 }
-                LabelType::WARPTYPE => self.warp_type = string_after_label(line, "Warp Type"),
-                LabelType::COST if self.expect_cost.is_some() && line.matches("Cost:").count() >= 3 => {
+                label_type::WARPTYPE => self.warp_type = string_after_label(line, "Warp Type"),
+                label_type::COST if self.expect_cost.is_some() && line.matches("Cost:").count() >= 3 => {
                     let costs = all_floats_after_label(line, "Cost");
                     let g = |i: usize| costs.get(i).copied();
                     match self.expect_cost {
@@ -391,17 +382,17 @@ impl ShipSpecBlock {
                     }
                     self.expect_cost = None;
                 }
-                LabelType::SHIELDMAX => {
+                label_type::SHIELDMAX => {
                     self.shield_max = float_after_label(line, "ShieldMax");
                     self.shield_ratio = float_after_label(line, "ShieldRatio");
                 }
-                LabelType::ONEXCOST => {
+                label_type::ONEXCOST => {
                     let v = all_floats_after_label(line, "x Cost");
                     for i in 0..4 {
                         self.shield_cost[i] = v.get(i).copied();
                     }
                 }
-                LabelType::DEFENSE => {
+                label_type::DEFENSE => {
                     let v = all_floats_after_label(line, "Defense");
                     for i in 0..4 {
                         self.shield_def[i] = v.get(i).copied();
@@ -512,10 +503,10 @@ impl ShipSpecBlock {
         }
     }
 
-    fn is_valid(&self, include_instances: bool) -> bool {
+    fn is_valid(&self) -> bool {
         self.structure.is_some()
             && self.beams_count.is_some()
-            && (self.category.is_some() || include_instances)
+            && self.category.is_some() 
     }
 }
 
@@ -539,14 +530,14 @@ fn title_parts(inner: &str) -> (Option<String>, String) {
     (None, inner.trim().to_string())
 }
 
-pub fn parse_logs(text: &str, include_instances: bool) -> Vec<Ship> {
+pub fn parse_logs(text: &str) -> Vec<Ship> {
     let mut ships = Vec::with_capacity(64);
     let mut block: Option<ShipSpecBlock> = None;
 
-    let finish = |b: Option<ShipSpecBlock>, out: &mut Vec<Ship>| {
+    let finish_ship = |b: Option<ShipSpecBlock>, out: &mut Vec<Ship>| {
         if let Some(mut b) = b {
             b.flush_weapon_section();
-            if b.is_valid(include_instances) {
+            if b.is_valid() {
                 out.push(b.into_ship());
             }
         }
@@ -556,7 +547,7 @@ pub fn parse_logs(text: &str, include_instances: bool) -> Vec<Ship> {
     for line in get_lines_memchr(text.as_bytes()) {
         if line.trim_start().starts_with('~') {
             if let Some(m) = TITLE_RE.captures(line.trim()) {
-                finish(block.take(), &mut ships);
+                finish_ship(block.take(), &mut ships);
                 let inner = m.name("inner").unwrap().as_str();
                 let dbref: i64 = m.name("dbref").unwrap().as_str().parse().unwrap_or(0);
                 let (cat, name) = title_parts(inner);
@@ -569,7 +560,7 @@ pub fn parse_logs(text: &str, include_instances: bool) -> Vec<Ship> {
             _ => {}
         }
     }
-    finish(block.take(), &mut ships);
+    finish_ship(block.take(), &mut ships);
     ships
 }
 
@@ -586,9 +577,12 @@ pub fn get_lines_memchr(buffer: &[u8]) -> impl Iterator<Item = &str> + '_ {
             Some(found) => {
                 let line = std::str::from_utf8(&remainder[..found]).unwrap_or("");
                 let line_end = pos + found;
+
                 pos += found + 1;
-                let has_lf = (buffer[line_end] == b'\r') as usize
+                
+                let has_lf = ((buffer[line_end] == b'\r') as usize)
                     & (pos < buffer.len() && (buffer[pos] == b'\n')) as usize;
+
                 pos += has_lf;
 
                 Some(line)
@@ -605,7 +599,6 @@ pub fn get_lines_memchr(buffer: &[u8]) -> impl Iterator<Item = &str> + '_ {
 
 /// The float after the first "label:" on the line
 fn float_after_label(line: &str, label: &str) -> Option<f64> {
-
     let key = format!("{label}:");
     let mut from = 0;
 
@@ -613,7 +606,7 @@ fn float_after_label(line: &str, label: &str) -> Option<f64> {
         let rest = line[from + rel + key.len()..].trim_start();
         let tok: String = rest
             .chars()
-            .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
+            .take_while(|c| c.is_ascii_digit() | (*c == '.') | (*c == '-'))
             .collect();
         if let Ok(v) = tok.trim_end_matches('.').parse::<f64>() {
             return Some(v);
@@ -634,7 +627,7 @@ fn all_floats_after_label(line: &str, label: &str) -> SmallVec<[f64; 12]> {
         let rest = line[from..].trim_start();
         let tok: String = rest
             .chars()
-            .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
+            .take_while(|c| c.is_ascii_digit() | (*c == '.') | (*c == '-'))
             .collect();
         if let Ok(v) = tok.trim_end_matches('.').parse::<f64>() {
             out.push(v);
@@ -757,7 +750,7 @@ mod tests {
 
     #[test]
     fn parses_specs_correctly() {
-        let ships = parse_logs(REFLEX, false);
+        let ships = parse_logs(REFLEX);
         assert_eq!(ships.len(), 1);
         let s = &ships[0];
         assert_eq!(s.dbref, 5367);

@@ -23,6 +23,8 @@ use shipdb::{
 use smallvec::SmallVec;
 use std::{env, fmt::Write};
 
+const DEFAULT_DBNAME: &str = "ships.db";
+
 #[derive(Clone, Copy)]
 enum ImgFmt {
     Svg,
@@ -71,10 +73,11 @@ fn plot_inst_damage_signal(sig: &DamageSignal, ship: &shipdb::Ship, fmt: ImgFmt)
 }
 
 fn main() -> Result<()> {
-    let mut positionals: SmallVec<[CompactString; 8]> = SmallVec::new();
+    let mut arguments: SmallVec<[CompactString; 8]> = SmallVec::new();
     let mut flags: FxHashMap<String, f64> = FxHashMap::default();
     let mut fmt = ImgFmt::Svg;
     let mut it = env::args().skip(1);
+
     while let Some(a) = it.next() {
         if let Some(key) = a.strip_prefix("--") {
             match key {
@@ -93,19 +96,20 @@ fn main() -> Result<()> {
             };
             flags.insert(key.to_string(), val);
         } else {
-            positionals.push(a.into());
+            arguments.push(a.into());
         }
     }
-    let Some(query) = positionals.first() else {
+
+    let Some(query) = arguments.first() else {
         bail!("usage: shipdb <ship-name> [db-path] [--eng N --tac N --helm N --oper N --sci N --dam N --wis N]");
     };
-    let path = positionals.get(1).map(CompactString::as_str).unwrap_or("ships.db");
+    let path = arguments.get(1).map(CompactString::as_str).unwrap_or(DEFAULT_DBNAME);
 
     let conn = open(path)?;
     let ships = load_ships(&conn)?;
 
     // Simulate con skills if any were supplied; unspecified consoles
-    // default to 0 points, wisdom defaults to 10 for 0 bonus 
+    // default to 0 points and wisdom defaults to 10 for 0 bonus 
     let get = |k: &str, d: f64| *flags.get(k).unwrap_or(&d);
     let character = ["eng", "tac", "helm", "oper", "sci", "dam", "wis"]
         .iter()
@@ -159,8 +163,7 @@ fn main() -> Result<()> {
         // Single ship, plots damage signal
         report_single(&fleet[0], character.is_some(), fmt)?;
     } else {
-
-        // Use rayon to parallelize ship damage output sims
+        // Simulate multiple ships, and use rayon to parallelize 
         let sims: SmallVec<[(String, DamageSignal); 16]> = fleet
             .par_iter()
             .map(|s| {
@@ -177,7 +180,7 @@ fn main() -> Result<()> {
             .into_iter()
             .collect();
         for (name, sig) in &sims {
-            let total = sig.cumulative.last().copied().unwrap_or(0.0);
+            let total = sig.total;
             println!(
                 "{}: {:.0} total damage, {:.1} sustained DPS",
                 name,
@@ -217,13 +220,13 @@ fn report_single(ship: &shipdb::Ship, tuned: bool, fmt: ImgFmt) -> Result<()> {
         let cfg = SimConfig::new(HORIZON_SECS, SAMPLE_DT, timing, VOLLEY_WINDOW);
         let sig = simulate_damage(ship, &mut rng, &cfg);
         let rotation: String = sig.rotation.iter().map(|f| f.label()).collect();
-        let total = sig.cumulative.last().copied().unwrap_or(0.0);
-        let peak = sig.instantaneous.iter().copied().fold(0.0_f64, f64::max);
+        let total = sig.total;
+        let peak = sig.peak;
         println!(
-            "Simulated {:.0}s @ {:.1}s samples ({} points), arc rotation [{}]:",
+            "Simulated {:.0}s @ {:.1}s samples ({} shots), arc rotation [{}]:",
             HORIZON_SECS,
             SAMPLE_DT,
-            sig.times.len(),
+            sig.events.len(),
             rotation,
         );
         println!(

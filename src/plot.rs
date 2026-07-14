@@ -8,8 +8,8 @@ use plotters::prelude::*;
 
 use crate::{DamageSignal, Face};
 
-const CAPFONT: (&str, u16) = ("sans-serif", 24);
-const LABFONT: (&str, u16) = ("sans-serif", 14);
+static CAPFONT: (&str, u16) = ("sans-serif", 24);
+static LABFONT: (&str, u16) = ("sans-serif", 14);
 
 fn text_style(font: (&'static str, u16), theme: &Theme) -> TextStyle<'static> {
     font.into_font().color(&theme.fg)
@@ -26,14 +26,14 @@ pub struct Theme {
     pub grid_bold: RGBColor,
 }
 
-pub const LIGHT: Theme = Theme {
+pub static LIGHT: Theme = Theme {
     bg: RGBColor(255, 255, 255),
     fg: RGBColor(0, 0, 0),
     grid_light: RGBColor(224, 224, 224),
     grid_bold: RGBColor(120, 120, 120),
 };
 
-pub const DARK: Theme = Theme {
+pub static DARK: Theme = Theme {
     bg: RGBColor(24, 24, 27),
     fg: RGBColor(220, 220, 225),
     grid_light: RGBColor(50, 50, 55),
@@ -149,28 +149,30 @@ where
     DB::ErrorType: 'static,
 {
     let dt = sig.dt;
-    let n = sig.times.len();
-    let mut by_face: FxHashMap<Face, Vec<f64>> = FxHashMap::default();
+    let x_max = sig.horizon;
 
+    // events are time-sorted, so a face's same-bin shots are contiguous
+    let mut by_face: FxHashMap<Face, Vec<(f64, f64)>> = FxHashMap::default();
     for e in &sig.events {
-        let k = (e.time / dt).round() as isize;
-        if k >= 0 && (k as usize) < n {
-            by_face.entry(e.face).or_insert_with(|| vec![0.0; n])[k as usize] += e.damage;
+        let t = (e.time / dt).round() * dt;
+        let impulses = by_face.entry(e.face).or_default();
+        match impulses.last_mut() {
+            Some(last) if last.0 == t => last.1 += e.damage,
+            _ => impulses.push((t, e.damage)),
         }
     }
-    let x_max = sig.times.last().copied().unwrap_or(0.0);
 
     root.fill(&theme.bg)?;
     let mut ctx =
         make_chart_context(root, caption, theme, "time (s)", "damage", (-10.0, x_max, PLOT_Y_MAX))?;
 
     for &face in &sig.rotation {
-        let Some(bins) = by_face.get(&face) else {
+        let Some(impulses) = by_face.get(&face) else {
             continue;
         };
         let color = face_color(face);
-        ctx.draw_series(bins.iter().enumerate().filter(|(_, &v)| v > 0.0).map(|(k, &v)| {
-            PathElement::new(vec![(k as f64 * dt, 0.0), (k as f64 * dt, v)], color.stroke_width(2))
+        ctx.draw_series(impulses.iter().map(|&(t, v)| {
+            PathElement::new(vec![(t, 0.0), (t, v)], color.stroke_width(2))
         }))?
         .label(face.label().to_string())
         .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], color.stroke_width(3)));
@@ -200,12 +202,12 @@ where
 {
     let x_max = sims
         .iter()
-        .map(|(_, s)| s.borrow().times.last().copied().unwrap_or(0.0))
+        .map(|(_, s)| s.borrow().horizon)
         .fold(0.0_f64, f64::max);
 
     let y_max = sims
         .iter()
-        .flat_map(|(_, s)| s.borrow().cumulative.iter().copied())
+        .map(|(_, s)| s.borrow().total)
         .fold(0.0_f64, f64::max)
         .max(1.0)
         * 1.05;
@@ -243,7 +245,7 @@ where
         let sig = sig.borrow();
         let color = series_color(i);
         ctx.draw_series(LineSeries::new(
-            sig.times.iter().zip(sig.cumulative.iter()).map(|(&t, &c)| (t, c)),
+            sig.cumulative.iter().copied(),
             color.stroke_width(1),
         ))?;
     }

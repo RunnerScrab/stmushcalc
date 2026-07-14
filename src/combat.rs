@@ -43,13 +43,14 @@ use crate::ship::Ship;
 use crate::weapon::Weapon;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[repr(u8)]
 pub enum Face {
-    Fore,
-    Aft,
-    Port,
-    Starboard,
-    Dorsal,
-    Ventral,
+    Fore = 1,
+    Aft = 2,
+    Port = 4,
+    Starboard = 8,
+    Dorsal = 16,
+    Ventral = 32,
 }
 
 impl Face {
@@ -76,20 +77,22 @@ impl Face {
         }
     }
 
-    /// The face on the opposite side of the cube (a 180 deg turn away)
     #[inline]
-    pub const fn opposite(self) -> Face {
-        match self {
-            Face::Fore => Face::Aft,
-            Face::Aft => Face::Fore,
-            Face::Port => Face::Starboard,
-            Face::Starboard => Face::Port,
-            Face::Dorsal => Face::Ventral,
-            Face::Ventral => Face::Dorsal,
-        }
+    const fn from_enum_discriminant(b: u8) -> Face {
+        unsafe { std::mem::transmute::<u8, Face>(b) }
     }
 
+    /// The face on the opposite side of the cube
     #[inline]
+    pub const fn opposite(self) -> Face {
+        // Opposite faces are adjacent-bit pairs (F/A, P/S, D/V), so swapping each bit
+        // with its neighbor always yields a valid enum discriminant
+        let d = self as u8;
+        let opp = ((d & 0x55) << 1) | ((d & 0xAA) >> 1);
+        unsafe { std::mem::transmute::<u8, Face>(opp) }
+    }
+
+    #[inline(always)]
     pub const fn label(self) -> char {
         match self {
             Face::Fore => 'F',
@@ -101,16 +104,15 @@ impl Face {
         }
     }
 
-    /// Turn angle, in degrees
-    #[inline]
+    #[inline(always)]
     pub fn angle_to(self, other: Face) -> f64 {
-        if self == other {
-            0.0
-        } else if self.opposite() == other {
-            180.0
-        } else {
-            90.0
-        }
+        let same = ((self == other) as u64).wrapping_neg();
+        let is_opp = ((self.opposite() == other) as u64).wrapping_neg();
+        f64::from_bits(
+            (0.0_f64.to_bits() & same)
+                | (180.0_f64.to_bits() & is_opp)
+                | (90.0_f64.to_bits() & !(same | is_opp)),
+        )
     }
 
     #[inline]
@@ -119,36 +121,79 @@ impl Face {
     }
 }
 
-/// Faces named in a weapon's arc string (e.g. "FAPSD")
-fn arc_faces(arc: &str) -> SmallVec<[Face;6]> {
-    let mut faces = SmallVec::new();
-    for c in arc.chars() {
-        if let Some(f) = Face::from_char(c) {
-            if !faces.contains(&f) {
-                faces.push(f);
-            }
+#[derive(Clone, Copy, Default)]
+struct FaceSeq(u64);
+
+impl FaceSeq {
+    #[inline]
+    fn len(self) -> usize {
+        // Faces are nonzero and packed contiguously from the low byte, so the
+        // leading zero bytes are the empty slots
+        8 - (self.0.leading_zeros() as usize >> 3)
+    }
+
+    #[inline]
+    fn push(&mut self, f: Face) {
+        self.0 |= (f as u64) << (self.len() << 3);
+    }
+
+    #[inline]
+    fn contains(self, f: Face) -> bool {
+        // faces are one-hot bytes, so OR-folding the bytes yields the membership mask
+        let x = self.0;
+        let x = (x >> 32) | x;
+        let x = (x >> 16) | x;
+        let x = (x >> 8) | x;
+        x as u8 & f as u8 != 0
+    }
+
+    #[inline]
+    fn push_unique(&mut self, f: Face) {
+        if !self.contains(f) {
+            self.push(f);
+        }
+    }
+
+    #[inline]
+    fn iter(self) -> impl Iterator<Item = Face> {
+        (0..self.len()).map(move |i| Face::from_enum_discriminant((self.0 >> (i << 3)) as u8))
+    }
+}
+
+/// Bit set of the faces in a weapon's arc string (e.g. "FAPSD"), one-hot per Face
+#[inline]
+fn arc_mask(arc: &str) -> u8 {
+    arc.chars().filter_map(Face::from_char).fold(0u8, |m, f| m | f as u8)
+}
+
+/// Per-weapon arc masks, indexed by weapon
+#[inline]
+fn arc_masks(weapons: &[Weapon]) -> Vec<u8> {
+    weapons.iter().map(|w| arc_mask(&w.arc)).collect()
+}
+
+/// Whether an arc mask covers a face
+#[inline]
+fn does_arc_mask_cover_face(arc: u8, face: Face) -> bool {
+    arc & face as u8 != 0
+}
+
+/// The distinct faces covered by some weapon's arc
+fn candidate_faces(weapon_arcs: &[u8]) -> FaceSeq {
+    let union = weapon_arcs.iter().fold(0u8, |a, &m| a | m);
+    let mut faces = FaceSeq::default();
+    for f in Face::ALL {
+        if does_arc_mask_cover_face(union, f) {
+            faces.push(f);
         }
     }
     faces
 }
 
-/// Per-weapon arcs
-fn weapon_faces(weapons: &[Weapon]) -> Vec<SmallVec<[Face; 6]>> {
-    weapons.iter().map(|w| arc_faces(&w.arc)).collect()
-}
-
-/// The distinct faces any weapon can bear on
-fn candidate_faces(faces: &[SmallVec<[Face; 6]>]) -> SmallVec<[Face; 6]> {
-    Face::ALL
-        .into_iter()
-        .filter(|f| faces.iter().any(|fs| fs.contains(f)))
-        .collect()
-}
-
-/// Choose the next face to present and its earliest bearing weapon's ready time
+/// Choose the next face to present and its earliest covering weapon's ready time
 fn select_next(
-    candidates: &[Face],
-    faces: &[SmallVec<[Face; 6]>],
+    candidates: FaceSeq,
+    weapon_arcs: &[u8],
     next_ready: &[f64],
     orientation: Face,
     t: f64,
@@ -157,10 +202,10 @@ fn select_next(
 
     let mut best: Option<(Face, f64)> = None;
     let mut best_key: Option<(f64, isize, f64, usize)> = None;
-    for &f in candidates {
-        let bearing = || faces.iter().enumerate().filter(|(_, fs)| fs.contains(&f));
+    for f in candidates.iter() {
+        let covering = || weapon_arcs.iter().enumerate().filter(|&(_, &arc)| does_arc_mask_cover_face(arc, f));
 
-        let ready = bearing()
+        let ready = covering()
             .map(|(w, _)| next_ready[w])
             .fold(f64::INFINITY, f64::min);
 
@@ -171,7 +216,7 @@ fn select_next(
 
         // Weapons ready by the earliest feasible fire time (>= now) plus window
         let fire_by = ready.max(t) + window;
-        let group = bearing().filter(|(w, _)| next_ready[*w] <= fire_by).count();
+        let group = covering().filter(|(w, _)| next_ready[*w] <= fire_by).count();
         let key = (
             ready,
             -(group as isize),
@@ -190,41 +235,46 @@ fn select_next(
 /// a window of it, e.g. you have missiles that recycle 0.5s after the beams on
 /// the same arc. We *assume* you want to fire them as a single group to maximize
 /// damage to the current shield face the enemy is presenting
-fn consolidate(
+fn consolidate_arc_weapons(
     arrival: f64,
     face: Face,
-    faces: &[SmallVec<[Face; 6]>],
+    weapon_arcs: &[u8],
     next_ready: &[f64],
     window: f64,
 ) -> f64 {
     let cutoff = arrival + window;
     let mut fire_t = arrival;
-    for (i, fs) in faces.iter().enumerate() {
-        if fs.contains(&face) && next_ready[i] <= cutoff && next_ready[i] > fire_t {
+    for (i, &arc) in weapon_arcs.iter().enumerate() {
+        if does_arc_mask_cover_face(arc, face) && next_ready[i] <= cutoff && next_ready[i] > fire_t {
             fire_t = next_ready[i];
         }
     }
     fire_t
 }
 
-/// The adjacent face (90 deg from current face) with the most ready weapons
-fn productive_intermediate(
+/// The adjacent face (90 deg from current face) with the most ready weapons;
+/// there will often not be one
+fn intermediate_ready_face(
     orientation: Face,
     target: Face,
-    candidates: &[Face],
-    faces: &[SmallVec<[Face; 6]>],
+    candidates: FaceSeq,
+    weapon_arcs: &[u8],
     next_ready: &[f64],
     t: f64,
 ) -> Option<Face> {
     let mut best: Option<(usize, Face)> = None;
-    for &m in candidates {
+    for m in candidates.iter() {
         if orientation.angle_to(m) != 90.0 || m.angle_to(target) != 90.0 {
             continue;
         }
-        let exclusive = faces
+        let exclusive = weapon_arcs
             .iter()
             .enumerate()
-            .filter(|(w, fs)| fs.contains(&m) && !fs.contains(&target) && next_ready[*w] <= t)
+            .filter(|&(w, &arc)| {
+                does_arc_mask_cover_face(arc, m) &
+                    !does_arc_mask_cover_face(arc, target)
+                    & (next_ready[w] <= t)
+            })
             .count();
         if exclusive > 0 && best.map_or(true, |(c, _)| exclusive > c) {
             best = Some((exclusive, m));
@@ -284,33 +334,35 @@ impl SimConfig {
 #[derive(Clone, Debug)]
 pub struct DamageSignal {
     pub dt: f64,
-    /// Sample times 0, dt, 2*dt, ... N*dt, up to horizon
-    pub times: Vec<f64>,
-    /// cumulative damage dealt by time t
-    pub cumulative: Vec<f64>,
-    /// damage signal as Dirac impulse train
-    pub instantaneous: Vec<f64>,
+    /// Simulated horizon, in seconds
+    pub horizon: f64,
+    /// Cumulative damage 
+    pub cumulative: Vec<(f64, f64)>,
+    /// Total damage from start to the horizon 
+    pub total: f64,
+    /// Largest single-instant, binnned damage
+    pub peak: f64,
     /// Every discharge, in time order
     pub events: Vec<Fire>,
-    /// The face visit order the ship cycled through
-    pub rotation: Vec<Face>,
+    /// The arc rotation the ship goes through 
+    pub rotation: SmallVec<[Face; 6]>,
     /// total seconds spent turning between arcs
     pub turn_time_total: f64,
-    /// distinct weapon recycle times, ascending (excludes one-shot weapons)
+    /// distinct weapon recycle times
     pub recycle_times: Vec<f64>,
 }
 
-/// Fire every weapon that bears on face and has recycled by time t
+/// Fire every weapon in arc of face that has recycled by time t
 fn fire_ready(
     t: f64,
     face: Face,
-    faces: &[SmallVec<[Face; 6]>],
+    weapon_arcs: &[u8],
     weapons: &[Weapon],
     events: &mut Vec<Fire>,
     next_ready: &mut [f64],
 ) {
-    for (i, fs) in faces.iter().enumerate() {
-        if fs.contains(&face) && next_ready[i] <= t {
+    for (i, &arc) in weapon_arcs.iter().enumerate() {
+        if does_arc_mask_cover_face(arc, face) && next_ready[i] <= t {
             events.push(Fire {
                 time: t,
                 weapon: i,
@@ -337,7 +389,6 @@ fn arrival_time(timing: TurnTimingModel, t: f64, turn: f64, ready: f64) -> f64 {
 /// Simulate a ship's damage output against a single, in-range enemy over
 /// cfg.horizon seconds and return the sampled damage signal
 pub fn simulate_damage(ship: &Ship, rng: &mut TurnRng, cfg: &SimConfig) -> DamageSignal {
-    // Resolve any attached character's tunings, cloning only when tuning applies
     let effective;
     let ship = if ship.character.is_some() {
         effective = ship.effective();
@@ -346,45 +397,45 @@ pub fn simulate_damage(ship: &Ship, rng: &mut TurnRng, cfg: &SimConfig) -> Damag
         ship
     };
     let weapons = &ship.weapons;
-    let faces = weapon_faces(weapons);
-    let candidates = candidate_faces(&faces);
+    let weapon_arcs = arc_masks(weapons);
+    let candidates = candidate_faces(&weapon_arcs);
 
-    let mut events: Vec<Fire> = Vec::new();
+    let pointcount = (cfg.horizon / cfg.t_res) as usize;
+    let mut events: Vec<Fire> = Vec::with_capacity(pointcount);
     let mut next_ready = vec![0.0f64; weapons.len()];
     let horizon = cfg.horizon;
 
-    let mut visited: Vec<Face> = Vec::with_capacity(256); // distinct faces, first-visit order
+    let mut visited = FaceSeq::default(); // distinct faces, in order of visit
     let mut t = 0.0;
     let mut orientation = Face::Fore;
 
-    // The ship starts already facing Fore, so anything ready there fires for
-    // free before the optimizer gets a chance to turn away from it
-    if faces.iter().enumerate().any(|(i, fs)| fs.contains(&orientation) && next_ready[i] <= t) {
+    // The ship starts already facing Fore
+    if weapon_arcs.iter().enumerate().any(|(i, &arc)| does_arc_mask_cover_face(arc, orientation) && next_ready[i] <= t) {
         visited.push(orientation);
-        fire_ready(t, orientation, &faces, weapons, &mut events, &mut next_ready);
+        fire_ready(t, orientation, &weapon_arcs, weapons, &mut events, &mut next_ready);
     }
 
-    // Turn to the next arc to come online, then fire everything that bears
+    // Turn to the next arc to come online, then fire everything in that arc 
     let window = cfg.volley_window.max(0.0);
     let mut turn_time_total = 0.0;
     while let Some((mut face, mut ready)) =
-        select_next(&candidates, &faces, &next_ready, orientation, t, window)
+        select_next(candidates, &weapon_arcs, &next_ready, orientation, t, window)
     {
         // Reroute a 180 through a perpendicular arc with ready weapons the
         // target can't fire
-        if face != orientation && orientation.angle_to(face) >= 180.0 {
-            if let Some(m) =
-                productive_intermediate(orientation, face, &candidates, &faces, &next_ready, t)
-            {
+        if ((face != orientation) & (orientation.angle_to(face) >= 180.0)) && 
+            let Some(m) =
+                intermediate_ready_face(orientation, face, candidates, &weapon_arcs, &next_ready, t)
+        {
                 face = m;
-                ready = faces
+                ready = weapon_arcs
                     .iter()
                     .enumerate()
-                    .filter(|(_, fs)| fs.contains(&face))
+                    .filter(|&(_, &arc)| does_arc_mask_cover_face(arc, face))
                     .map(|(w, _)| next_ready[w])
                     .fold(f64::INFINITY, f64::min);
-            }
         }
+
         let mut this_turn = 0.0;
         let arrival = if face != orientation {
             let turn = ship.draw_turn_time(rng, orientation.angle_to(face));
@@ -394,15 +445,16 @@ pub fn simulate_damage(ship: &Ship, rng: &mut TurnRng, cfg: &SimConfig) -> Damag
         } else {
             t.max(ready)
         };
-        t = consolidate(arrival, face, &faces, &next_ready, window);
+
+        t = consolidate_arc_weapons(arrival, face, &weapon_arcs, &next_ready, window);
         if t > horizon {
             break;
         }
         turn_time_total += this_turn;
-        if !visited.contains(&face) {
-            visited.push(face);
-        }
-        fire_ready(t, face, &faces, weapons, &mut events, &mut next_ready);
+
+        visited.push_unique(face);
+
+        fire_ready(t, face, &weapon_arcs, weapons, &mut events, &mut next_ready);
     }
 
     // Truncate the time of each shot to the sample grid precision, i.e. past deciseconds
@@ -412,54 +464,71 @@ pub fn simulate_damage(ship: &Ship, rng: &mut TurnRng, cfg: &SimConfig) -> Damag
         }
     }
     events.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
-    let (times, cumulative, instantaneous) = sample(&events, cfg);
+    let (cumulative, total, peak) = sample(&events, cfg);
     let mut recycle_times: Vec<f64> = weapons.iter().map(|w| w.recycle_time).filter(|t| *t > 0.0).collect();
     recycle_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
     recycle_times.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
     DamageSignal {
         dt: cfg.t_res,
-        times,
+        horizon: cfg.horizon,
         cumulative,
-        instantaneous,
+        total,
+        peak,
         events,
-        rotation: visited,
+        rotation: visited.iter().collect(),
         turn_time_total,
         recycle_times,
     }
 }
 
 /// Sample damage signal
-fn sample(events: &[Fire], cfg: &SimConfig) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
-    let n = if cfg.t_res > 0.0 {
-        (cfg.horizon / cfg.t_res).floor() as usize + 1
-    } else {
-        0
-    };
-    let times: Vec<f64> = (0..n).map(|k| k as f64 * cfg.t_res).collect();
+fn sample(events: &[Fire], cfg: &SimConfig) -> (Vec<(f64, f64)>, f64, f64) {
+    let mut curve: Vec<(f64, f64)> = Vec::with_capacity(2 * events.len() + 2);
+    curve.push((0.0, 0.0));
+    let mut total = 0.0;
+    let mut peak = 0.0_f64;
 
-    // Instantaneous damage, each shot snapped to the nearest sample
-    let mut instantaneous = vec![0.0; n];
-    for ev in events {
-        let k = (ev.time / cfg.t_res).round() as isize;
-        if k >= 0 && (k as usize) < n {
-            instantaneous[k as usize] += ev.damage;
+    let mut i = 0;
+    while i < events.len() {
+        let t = events[i].time;
+        let mut bin = 0.0;
+        while i < events.len() && events[i].time == t {
+            bin += events[i].damage;
+            i += 1;
         }
+        curve.push((t, total));
+        total += bin;
+        curve.push((t, total));
+        peak = peak.max(bin);
     }
+    curve.push((cfg.horizon, total));
 
-    // Cumulative: running sum of the damage pulse train 
-    let mut cumulative = vec![0.0; n];
-    let mut acc = 0.0;
-    for k in 0..n {
-        acc += instantaneous[k];
-        cumulative[k] = acc;
-    }
-
-    (times, cumulative, instantaneous)
+    (curve, total, peak)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn angle_check_correct() {
+       let testface: Face = Face::Fore;
+       assert_eq!(testface.angle_to(Face::Aft), 180.0);
+       assert_eq!(testface.angle_to(Face::Starboard), 90.0);
+       assert_eq!(testface.angle_to(Face::Port), 90.0);
+       assert_eq!(testface.angle_to(Face::Ventral), 90.0);
+       assert_eq!(testface.angle_to(Face::Dorsal), 90.0);
+       assert_eq!(testface.angle_to(Face::Fore), 0.0);
+
+       // The face variants cannot be reordered, as we use bitwise arithmetic
+       // on the enum discriminants
+       assert_eq!(Face::Fore.opposite(), Face::Aft);
+       assert_eq!(Face::Aft.opposite(), Face::Fore);
+       assert_eq!(Face::Port.opposite(), Face::Starboard);
+       assert_eq!(Face::Starboard.opposite(), Face::Port);
+       assert_eq!(Face::Dorsal.opposite(), Face::Ventral);
+       assert_eq!(Face::Ventral.opposite(), Face::Dorsal);
+    }
 
     #[test]
     fn anticipatory_hides_turn_under_a_long_recycle() {
