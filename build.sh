@@ -11,6 +11,7 @@ cp shipdb-wasm/pkg/shipdb_wasm.js \
    shipdb-wasm/pkg/shipdb_wasm.d.ts \
    shipdb-wasm/pkg/shipdb_wasm_bg.wasm.d.ts \
    docs/
+cp shipdb-wasm/www/favicon.ico docs/favicon.ico
 
 sed 's#\.\./pkg/#./#' shipdb-wasm/www/index.html > docs/index.html
 

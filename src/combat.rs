@@ -372,7 +372,7 @@ fn fire_ready(
             next_ready[i] = if weapons[i].recycle_time > 0.0 {
                 t + weapons[i].recycle_time
             } else {
-                f64::INFINITY // no recycle: fires exactly once
+                f64::INFINITY
             };
         }
     }
@@ -421,8 +421,10 @@ pub fn simulate_damage(ship: &Ship, rng: &mut TurnRng, cfg: &SimConfig) -> Damag
     while let Some((mut face, mut ready)) =
         select_next(candidates, &weapon_arcs, &next_ready, orientation, t, window)
     {
-        // Reroute a 180 through a perpendicular arc with ready weapons the
-        // target can't fire
+
+        // If there are ready weapons on both an opposite face and an adjacent face, turn there
+        // instead before turning to the opposite face, so the middle arc can be fired as we pass
+        // through it
         if ((face != orientation) & (orientation.angle_to(face) >= 180.0)) && 
             let Some(m) =
                 intermediate_ready_face(orientation, face, candidates, &weapon_arcs, &next_ready, t)
