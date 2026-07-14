@@ -320,6 +320,13 @@
     return { panel, body };
   }
 
+  const plotObserver = new IntersectionObserver(entries => {
+    for (const e of entries) {
+      e.target._visible = e.isIntersecting;
+      if (e.isIntersecting && e.target._dirty) e.target._draw();
+    }
+  }, { rootMargin: "300px" });
+
   function addResizablePlot(parent, render, label) {
     const area = document.createElement("div");
     area.className = "plot-area";
@@ -332,7 +339,10 @@
     area.appendChild(canvas);
     parent.appendChild(area);
 
-    const redraw = () => {
+    let lastW = -1, lastH = -1;
+    area._dirty = true;
+    area._visible = false;
+    area._draw = () => {
       if (!canvas.isConnected || area.clientWidth === 0) return;
       const w = Math.max(200, Math.floor(area.clientWidth));
       const h = Math.max(150, Math.floor(area.clientHeight));
@@ -340,10 +350,24 @@
         canvas.width = w;
         canvas.height = h;
       }
+      lastW = w;
+      lastH = h;
+      area._dirty = false;
       render(canvas.id);
     };
-    canvas._redraw = redraw;
-    new ResizeObserver(redraw).observe(area);
+    canvas._redraw = () => {
+      area._dirty = true;
+      if (area._visible) area._draw();
+    };
+    new ResizeObserver(() => {
+      if (!canvas.isConnected || area.clientWidth === 0) return;
+      const w = Math.max(200, Math.floor(area.clientWidth));
+      const h = Math.max(150, Math.floor(area.clientHeight));
+      if (w === lastW && h === lastH) return;
+      area._dirty = true;
+      if (area._visible) area._draw();
+    }).observe(area);
+    plotObserver.observe(area);
   }
 
   function closestPanel(x, y) {
