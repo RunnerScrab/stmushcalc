@@ -34,7 +34,7 @@ pub static LIGHT: Theme = Theme {
 };
 
 pub static DARK: Theme = Theme {
-    bg: RGBColor(24, 24, 27),
+    bg: RGBColor(29, 29, 32),
     fg: RGBColor(220, 220, 225),
     grid_light: RGBColor(50, 50, 55),
     grid_bold: RGBColor(90, 90, 95),

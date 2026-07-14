@@ -4,10 +4,10 @@ use std::rc::Rc;
 use std::sync::OnceLock;
 
 use plotters::coord::Shift;
-use plotters::prelude::{DrawingArea, IntoDrawingArea};
+use plotters::prelude::{DrawingArea, IntoDrawingArea, RGBColor};
 use plotters_canvas::CanvasBackend;
 use shipdb::plot::{
-    render_cumulative as plot_cumulative, render_instantaneous as plot_instantaneous, DARK,
+    render_cumulative as plot_cumulative, render_instantaneous as plot_instantaneous, Theme, DARK,
 };
 use shipdb::{
     is_transwarp, simulate_damage, Character, DamageSignal, Ship, SimConfig, TurnRng,
@@ -134,6 +134,21 @@ fn parse_timing(s: &str) -> TurnTimingModel {
     } else {
         TurnTimingModel::Reactive
     }
+}
+
+fn theme_with_bg(bg: &str) -> Theme {
+    let rgb: Vec<u8> = bg
+        .trim_start_matches("rgba(")
+        .trim_start_matches("rgb(")
+        .trim_end_matches(')')
+        .split(',')
+        .filter_map(|p| p.trim().parse().ok())
+        .collect();
+    let bg = match rgb.as_slice() {
+        [r, g, b, ..] => RGBColor(*r, *g, *b),
+        _ => DARK.bg,
+    };
+    Theme { bg, ..DARK }
 }
 
 fn on_canvas(
@@ -511,12 +526,14 @@ pub fn render_instantaneous(
     dam: f64,
     wis: f64,
     timing: &str,
+    bg: &str,
     canvas_id: &str,
 ) -> Result<(), JsValue> {
     let ship = find_ship_or_err(name)?;
     let sig = run(ship, Character::new(eng, tac, helm, oper, sci, dam, wis), parse_timing(timing));
+    let theme = theme_with_bg(bg);
     on_canvas(canvas_id, |root| {
-        plot_instantaneous(root, &sig, "Damage Timeline", &DARK).map_err(jerr)
+        plot_instantaneous(root, &sig, "Damage Timeline", &theme).map_err(jerr)
     })
 }
 
@@ -532,6 +549,7 @@ pub fn render_cumulative(
     dam: f64,
     wis: f64,
     timing: &str,
+    bg: &str,
     canvas_id: &str,
 ) -> Result<(), JsValue> {
     let ch = Character::new(eng, tac, helm, oper, sci, dam, wis);
@@ -540,8 +558,9 @@ pub fn render_cumulative(
         let ship = find_ship_or_err(name)?;
         sims.push((ship.name.clone(), run(ship, ch.clone(), parse_timing(timing))));
     }
+    let theme = theme_with_bg(bg);
     on_canvas(canvas_id, |root| {
-        plot_cumulative(root, &sims, "Cumulative Damage Outputs", &DARK).map_err(jerr)
+        plot_cumulative(root, &sims, "Cumulative Damage Outputs", &theme).map_err(jerr)
     })
 }
 

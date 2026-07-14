@@ -63,16 +63,19 @@ export function list_ships() {
  * @param {number} dam
  * @param {number} wis
  * @param {string} timing
+ * @param {string} bg
  * @param {string} canvas_id
  */
-export function render_cumulative(names, eng, tac, helm, oper, sci, dam, wis, timing, canvas_id) {
+export function render_cumulative(names, eng, tac, helm, oper, sci, dam, wis, timing, bg, canvas_id) {
     const ptr0 = passArrayJsValueToWasm0(names, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(timing, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(canvas_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const ptr2 = passStringToWasm0(bg, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.render_cumulative(ptr0, len0, eng, tac, helm, oper, sci, dam, wis, ptr1, len1, ptr2, len2);
+    const ptr3 = passStringToWasm0(canvas_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.render_cumulative(ptr0, len0, eng, tac, helm, oper, sci, dam, wis, ptr1, len1, ptr2, len2, ptr3, len3);
     if (ret[1]) {
         throw takeFromExternrefTable0(ret[0]);
     }
@@ -88,16 +91,19 @@ export function render_cumulative(names, eng, tac, helm, oper, sci, dam, wis, ti
  * @param {number} dam
  * @param {number} wis
  * @param {string} timing
+ * @param {string} bg
  * @param {string} canvas_id
  */
-export function render_instantaneous(name, eng, tac, helm, oper, sci, dam, wis, timing, canvas_id) {
+export function render_instantaneous(name, eng, tac, helm, oper, sci, dam, wis, timing, bg, canvas_id) {
     const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(timing, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(canvas_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const ptr2 = passStringToWasm0(bg, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.render_instantaneous(ptr0, len0, eng, tac, helm, oper, sci, dam, wis, ptr1, len1, ptr2, len2);
+    const ptr3 = passStringToWasm0(canvas_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.render_instantaneous(ptr0, len0, eng, tac, helm, oper, sci, dam, wis, ptr1, len1, ptr2, len2, ptr3, len3);
     if (ret[1]) {
         throw takeFromExternrefTable0(ret[0]);
     }
