@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 
 use plotters::coord::Shift;
 use plotters::prelude::{DrawingArea, IntoDrawingArea, RGBColor};
-use plotters_canvas::CanvasBackend;
+use plotters::backend::SVGBackend;
 use shipdb::plot::{
     render_cumulative as plot_cumulative, render_instantaneous as plot_instantaneous, Theme, DARK,
 };
@@ -151,15 +151,18 @@ fn theme_with_bg(bg: &str) -> Theme {
     Theme { bg, ..DARK }
 }
 
-fn on_canvas(
-    canvas_id: &str,
-    draw: impl FnOnce(&DrawingArea<CanvasBackend, Shift>) -> Result<(), JsValue>,
-) -> Result<(), JsValue> {
-    let backend = CanvasBackend::new(canvas_id).ok_or_else(|| jerr("no such canvas"))?;
-    let root = backend.into_drawing_area();
-    draw(&root)?;
-    root.present().map_err(jerr)?;
-    Ok(())
+fn to_svg(
+    width: u32,
+    height: u32,
+    draw: impl FnOnce(&DrawingArea<SVGBackend, Shift>) -> Result<(), JsValue>,
+) -> Result<String, JsValue> {
+    let mut svg = String::new();
+    {
+        let root = SVGBackend::with_string(&mut svg, (width, height)).into_drawing_area();
+        draw(&root)?;
+        root.present().map_err(jerr)?;
+    }
+    Ok(svg)
 }
 
 #[wasm_bindgen(start)]
@@ -527,12 +530,13 @@ pub fn render_instantaneous(
     wis: f64,
     timing: &str,
     bg: &str,
-    canvas_id: &str,
-) -> Result<(), JsValue> {
+    width: u32,
+    height: u32,
+) -> Result<String, JsValue> {
     let ship = find_ship_or_err(name)?;
     let sig = run(ship, Character::new(eng, tac, helm, oper, sci, dam, wis), parse_timing(timing));
     let theme = theme_with_bg(bg);
-    on_canvas(canvas_id, |root| {
+    to_svg(width, height, |root| {
         plot_instantaneous(root, &sig, "Damage Timeline", &theme).map_err(jerr)
     })
 }
@@ -550,8 +554,9 @@ pub fn render_cumulative(
     wis: f64,
     timing: &str,
     bg: &str,
-    canvas_id: &str,
-) -> Result<(), JsValue> {
+    width: u32,
+    height: u32,
+) -> Result<String, JsValue> {
     let ch = Character::new(eng, tac, helm, oper, sci, dam, wis);
     let mut sims: Vec<(String, Rc<DamageSignal>)> = Vec::with_capacity(names.len());
     for name in &names {
@@ -559,7 +564,7 @@ pub fn render_cumulative(
         sims.push((ship.name.clone(), run(ship, ch.clone(), parse_timing(timing))));
     }
     let theme = theme_with_bg(bg);
-    on_canvas(canvas_id, |root| {
+    to_svg(width, height, |root| {
         plot_cumulative(root, &sims, "Cumulative Damage Outputs", &theme).map_err(jerr)
     })
 }

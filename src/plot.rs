@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 
-use fxhash::FxHashMap;
-use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint, Ranged};
+use plotters::coord::ranged1d::{BoldPoints, DefaultFormatting, KeyPointHint, Ranged};
+use plotters::style::text_anchor::{HPos, Pos, VPos};
 use plotters::coord::types::RangedCoordf64;
 use plotters::coord::Shift;
 use plotters::prelude::*;
@@ -61,22 +61,20 @@ fn series_color(i: usize) -> RGBColor {
 }
 
 #[inline]
+fn face_index(f: Face) -> usize {
+    (f as u8).trailing_zeros() as usize
+}
+
+#[inline]
 pub fn face_color(f: Face) -> RGBColor {
-    let idx = match f {
-        Face::Fore => 0,
-        Face::Aft => 1,
-        Face::Port => 2,
-        Face::Starboard => 3,
-        Face::Dorsal => 4,
-        Face::Ventral => 5,
-    };
-    PALETTE[idx]
+    PALETTE[face_index(f)]
 }
 
 /// x-axis with explicit tick points every 30s
 struct XTicks {
     inner: RangedCoordf64,
     ticks: Vec<f64>,
+    minor: bool,
 }
 
 impl Ranged for XTicks {
@@ -89,8 +87,16 @@ impl Ranged for XTicks {
     }
 
     #[inline]
-    fn key_points<H: KeyPointHint>(&self, _hint: H) -> Vec<f64> {
-        self.ticks.clone()
+    fn key_points<H: KeyPointHint>(&self, hint: H) -> Vec<f64> {
+        if self.minor && hint.weight().allow_light_points() {
+            self.ticks
+                .iter()
+                .map(|&t| t + 15.0)
+                .filter(|&x| self.inner.range().contains(&x))
+                .collect()
+        } else {
+            self.ticks.clone()
+        }
     }
 
     #[inline]
@@ -99,10 +105,49 @@ impl Ranged for XTicks {
     }
 }
 
-fn x_ticks(x_max: f64, x_min: f64) -> XTicks {
+/// y-axis with unlabeled minor lines halfway between the auto ticks
+struct YTicks {
+    inner: RangedCoordf64,
+    minor: bool,
+}
+
+impl Ranged for YTicks {
+    type FormatOption = DefaultFormatting;
+    type ValueType = f64;
+
+    #[inline]
+    fn map(&self, v: &f64, limit: (i32, i32)) -> i32 {
+        self.inner.map(v, limit)
+    }
+
+    #[inline]
+    fn key_points<H: KeyPointHint>(&self, hint: H) -> Vec<f64> {
+        let bold = self.inner.key_points(BoldPoints(hint.bold_points()));
+        if self.minor && hint.weight().allow_light_points() {
+            bold.windows(2).map(|w| 0.5 * (w[0] + w[1])).collect()
+        } else {
+            bold
+        }
+    }
+
+    #[inline]
+    fn range(&self) -> std::ops::Range<f64> {
+        self.inner.range()
+    }
+}
+
+fn y_ticks(y_max: f64, minor: bool) -> YTicks {
+    YTicks {
+        inner: (0.0..y_max).into(),
+        minor,
+    }
+}
+
+fn x_ticks(x_max: f64, x_min: f64, minor: bool) -> XTicks {
     XTicks {
-        inner: (x_min..(x_max + 10.0)).into(),
+        inner: (x_min..x_max).into(),
         ticks: (0..=(x_max / 30.0) as usize).map(|i| i as f64 * 30.0).collect(),
+        minor,
     }
 }
 
@@ -114,27 +159,55 @@ fn make_chart_context<'a, DB: DrawingBackend>(
     xlab: &str,
     ylab: &str,
     (x_start, x_max, y_max): (f64, f64, f64),
-) -> Result<ChartContext<'a, DB, Cartesian2d<XTicks, RangedCoordf64>>, DrawingAreaErrorKind<DB::ErrorType>>
+    minor: bool,
+) -> Result<ChartContext<'a, DB, Cartesian2d<XTicks, YTicks>>, DrawingAreaErrorKind<DB::ErrorType>>
 where
     DB::ErrorType: 'static,
 {
     let mut ctx = ChartBuilder::on(root)
         .margin(10)
+        .margin_right(22)
         .set_label_area_size(LabelAreaPosition::Left, 90)
         .set_label_area_size(LabelAreaPosition::Bottom, 40)
         .caption(caption, text_style(CAPFONT, theme))
-        .build_cartesian_2d(x_ticks(x_max, x_start), 0.0..y_max)?;
+        .build_cartesian_2d(x_ticks(x_max, x_start, minor), y_ticks(y_max, minor))?;
 
-    ctx.configure_mesh()
-        .x_desc(xlab)
-        .y_desc(ylab)
-        .y_max_light_lines(1)
-        .axis_style(theme.grid_bold)
-        .bold_line_style(theme.grid_bold)
-        .light_line_style(theme.grid_light)
-        .label_style(text_style(LABFONT, theme))
-        .axis_desc_style(text_style(LABFONT, theme))
-        .draw()?;
+    {
+        let mut mesh = ctx.configure_mesh();
+        mesh.x_desc(xlab)
+            .y_desc(ylab)
+            .y_max_light_lines(1)
+            .x_label_formatter(&|v| format!("{v:.0}"))
+            .y_label_formatter(&|v| format!("{v:.0}"))
+            .axis_style(theme.grid_bold)
+            .bold_line_style(theme.grid_bold.stroke_width(if minor { 2 } else { 1 }))
+            .light_line_style(theme.grid_light)
+            .label_style(text_style(LABFONT, theme))
+            .axis_desc_style(text_style(LABFONT, theme));
+        if minor {
+            mesh.x_max_light_lines(1);
+        }
+        mesh.draw()?;
+    }
+
+    if minor {
+        let xstyle = text_style(LABFONT, theme).pos(Pos::new(HPos::Center, VPos::Top));
+        let ystyle = text_style(LABFONT, theme).pos(Pos::new(HPos::Right, VPos::Center));
+        ctx.draw_series(
+            (0..)
+                .map(|k| 15.0 + 30.0 * k as f64)
+                .take_while(|&x| x < x_max)
+                .map(|x| {
+                    EmptyElement::at((x, 0.0)) + Text::new(format!("{x:.0}"), (0, 11), xstyle.clone())
+                }),
+        )?;
+
+        let y_bold = RangedCoordf64::from(0.0..y_max).key_points(BoldPoints(11));
+        ctx.draw_series(y_bold.windows(2).map(|w| {
+            let y = 0.5 * (w[0] + w[1]);
+            EmptyElement::at((0.0, y)) + Text::new(format!("{y:.0}"), (-10, 0), ystyle.clone())
+        }))?;
+    }
     Ok(ctx)
 }
 
@@ -152,10 +225,10 @@ where
     let x_max = sig.horizon;
 
     // events are time-sorted, so a face's same-bin shots are contiguous
-    let mut by_face: FxHashMap<Face, Vec<(f64, f64)>> = FxHashMap::default();
+    let mut by_face: [Vec<(f64, f64)>; 6] = Default::default();
     for e in &sig.events {
         let t = (e.time / dt).round() * dt;
-        let impulses = by_face.entry(e.face).or_default();
+        let impulses = &mut by_face[face_index(e.face)];
         match impulses.last_mut() {
             Some(last) if last.0 == t => last.1 += e.damage,
             _ => impulses.push((t, e.damage)),
@@ -164,12 +237,13 @@ where
 
     root.fill(&theme.bg)?;
     let mut ctx =
-        make_chart_context(root, caption, theme, "time (s)", "damage", (-10.0, x_max, PLOT_Y_MAX))?;
+        make_chart_context(root, caption, theme, "time (s)", "damage", (-10.0, x_max, PLOT_Y_MAX), false)?;
 
     for &face in &sig.rotation {
-        let Some(impulses) = by_face.get(&face) else {
+        let impulses = &by_face[face_index(face)];
+        if impulses.is_empty() {
             continue;
-        };
+        }
         let color = face_color(face);
         ctx.draw_series(impulses.iter().map(|&(t, v)| {
             PathElement::new(vec![(t, 0.0), (t, v)], color.stroke_width(2))
@@ -239,7 +313,7 @@ where
 
     chart_area.fill(&theme.bg)?;
     let mut ctx =
-        make_chart_context(&chart_area, caption, theme, "time (s)", "cumulative damage", (0.0, x_max, y_max))?;
+        make_chart_context(&chart_area, caption, theme, "time (s)", "cumulative damage", (0.0, x_max, y_max), true)?;
 
     for (i, (_, sig)) in sims.iter().enumerate() {
         let sig = sig.borrow();
@@ -267,7 +341,7 @@ where
                 color.stroke_width(3),
             ))?;
             legend_area.draw(&Text::new(
-                name.clone(),
+                name.as_str(),
                 (x + SWATCH_W + LABEL_GAP, y - 7),
                 text_style(LABFONT, theme),
             ))?;

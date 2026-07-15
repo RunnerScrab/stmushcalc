@@ -64,20 +64,32 @@ export function list_ships() {
  * @param {number} wis
  * @param {string} timing
  * @param {string} bg
- * @param {string} canvas_id
+ * @param {number} width
+ * @param {number} height
+ * @returns {string}
  */
-export function render_cumulative(names, eng, tac, helm, oper, sci, dam, wis, timing, bg, canvas_id) {
-    const ptr0 = passArrayJsValueToWasm0(names, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(timing, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(bg, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ptr3 = passStringToWasm0(canvas_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len3 = WASM_VECTOR_LEN;
-    const ret = wasm.render_cumulative(ptr0, len0, eng, tac, helm, oper, sci, dam, wis, ptr1, len1, ptr2, len2, ptr3, len3);
-    if (ret[1]) {
-        throw takeFromExternrefTable0(ret[0]);
+export function render_cumulative(names, eng, tac, helm, oper, sci, dam, wis, timing, bg, width, height) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const ptr0 = passArrayJsValueToWasm0(names, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(timing, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(bg, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.render_cumulative(ptr0, len0, eng, tac, helm, oper, sci, dam, wis, ptr1, len1, ptr2, len2, width, height);
+        var ptr4 = ret[0];
+        var len4 = ret[1];
+        if (ret[3]) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
     }
 }
 
@@ -92,20 +104,32 @@ export function render_cumulative(names, eng, tac, helm, oper, sci, dam, wis, ti
  * @param {number} wis
  * @param {string} timing
  * @param {string} bg
- * @param {string} canvas_id
+ * @param {number} width
+ * @param {number} height
+ * @returns {string}
  */
-export function render_instantaneous(name, eng, tac, helm, oper, sci, dam, wis, timing, bg, canvas_id) {
-    const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(timing, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(bg, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ptr3 = passStringToWasm0(canvas_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len3 = WASM_VECTOR_LEN;
-    const ret = wasm.render_instantaneous(ptr0, len0, eng, tac, helm, oper, sci, dam, wis, ptr1, len1, ptr2, len2, ptr3, len3);
-    if (ret[1]) {
-        throw takeFromExternrefTable0(ret[0]);
+export function render_instantaneous(name, eng, tac, helm, oper, sci, dam, wis, timing, bg, width, height) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(timing, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(bg, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.render_instantaneous(ptr0, len0, eng, tac, helm, oper, sci, dam, wis, ptr1, len1, ptr2, len2, width, height);
+        var ptr4 = ret[0];
+        var len4 = ret[1];
+        if (ret[3]) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
     }
 }
 
@@ -239,12 +263,6 @@ function __wbg_get_imports() {
         __wbg_append_6c3c5a4e89d0c763: function() { return handleError(function (arg0, arg1) {
             arg0.append(arg1);
         }, arguments); },
-        __wbg_arc_61372d0a8f0a988c: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5) {
-            arg0.arc(arg1, arg2, arg3, arg4, arg5);
-        }, arguments); },
-        __wbg_beginPath_ca2dfce389ff20d2: function(arg0) {
-            arg0.beginPath();
-        },
         __wbg_body_40ec34e0a2931fe8: function(arg0) {
             const ret = arg0.body;
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
@@ -268,47 +286,6 @@ function __wbg_get_imports() {
                 wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
             }
         },
-        __wbg_fillRect_97b1f503e30148c3: function(arg0, arg1, arg2, arg3, arg4) {
-            arg0.fillRect(arg1, arg2, arg3, arg4);
-        },
-        __wbg_fillText_e462ba58cec15054: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
-            arg0.fillText(getStringFromWasm0(arg1, arg2), arg3, arg4);
-        }, arguments); },
-        __wbg_fill_7e2406c195723006: function(arg0) {
-            arg0.fill();
-        },
-        __wbg_getContext_e79ddf6a9cb3cc76: function() { return handleError(function (arg0, arg1, arg2) {
-            const ret = arg0.getContext(getStringFromWasm0(arg1, arg2));
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        }, arguments); },
-        __wbg_getElementById_1cbd8f06dbe8eb8e: function(arg0, arg1, arg2) {
-            const ret = arg0.getElementById(getStringFromWasm0(arg1, arg2));
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_height_6eec812c213259a1: function(arg0) {
-            const ret = arg0.height;
-            return ret;
-        },
-        __wbg_instanceof_CanvasRenderingContext2d_2284b703b7023dcc: function(arg0) {
-            let result;
-            try {
-                result = arg0 instanceof CanvasRenderingContext2D;
-            } catch (_) {
-                result = false;
-            }
-            const ret = result;
-            return ret;
-        },
-        __wbg_instanceof_HtmlCanvasElement_ed02ed9136056019: function(arg0) {
-            let result;
-            try {
-                result = arg0 instanceof HTMLCanvasElement;
-            } catch (_) {
-                result = false;
-            }
-            const ret = result;
-            return ret;
-        },
         __wbg_instanceof_HtmlElement_4493a09212d3586f: function(arg0) {
             let result;
             try {
@@ -329,12 +306,6 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
-        __wbg_lineTo_1aeefd30328165b5: function(arg0, arg1, arg2) {
-            arg0.lineTo(arg1, arg2);
-        },
-        __wbg_moveTo_2618bed6b5b25622: function(arg0, arg1, arg2) {
-            arg0.moveTo(arg1, arg2);
-        },
         __wbg_new_227d7c05414eb861: function() {
             const ret = new Error();
             return ret;
@@ -350,36 +321,9 @@ function __wbg_get_imports() {
         __wbg_remove_ce1b54059317fe8a: function(arg0) {
             arg0.remove();
         },
-        __wbg_restore_ab535bc88702bcc0: function(arg0) {
-            arg0.restore();
-        },
-        __wbg_rotate_6a6e81bc63bce7d8: function() { return handleError(function (arg0, arg1) {
-            arg0.rotate(arg1);
-        }, arguments); },
-        __wbg_save_cd0bc920468bfe2c: function(arg0) {
-            arg0.save();
-        },
         __wbg_setAttribute_71039043be82d098: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
             arg0.setAttribute(getStringFromWasm0(arg1, arg2), getStringFromWasm0(arg3, arg4));
         }, arguments); },
-        __wbg_set_fillStyle_50280bb4932b89d2: function(arg0, arg1) {
-            arg0.fillStyle = arg1;
-        },
-        __wbg_set_font_33fee74f2c82cb6f: function(arg0, arg1, arg2) {
-            arg0.font = getStringFromWasm0(arg1, arg2);
-        },
-        __wbg_set_lineWidth_beb3d05e36f4cc53: function(arg0, arg1) {
-            arg0.lineWidth = arg1;
-        },
-        __wbg_set_strokeStyle_8877ef451272f3e2: function(arg0, arg1) {
-            arg0.strokeStyle = arg1;
-        },
-        __wbg_set_textAlign_75f93b22c0415d5d: function(arg0, arg1, arg2) {
-            arg0.textAlign = getStringFromWasm0(arg1, arg2);
-        },
-        __wbg_set_textBaseline_edb08ba62ac0d3ac: function(arg0, arg1, arg2) {
-            arg0.textBaseline = getStringFromWasm0(arg1, arg2);
-        },
         __wbg_set_textContent_54dcad83ae15772d: function(arg0, arg1, arg2) {
             arg0.textContent = arg1 === 0 ? undefined : getStringFromWasm0(arg1, arg2);
         },
@@ -405,23 +349,6 @@ function __wbg_get_imports() {
         __wbg_static_accessor_WINDOW_f2829a2234d7819e: function() {
             const ret = typeof window === 'undefined' ? null : window;
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_stringify_b54333f60f1e4dad: function() { return handleError(function (arg0) {
-            const ret = JSON.stringify(arg0);
-            return ret;
-        }, arguments); },
-        __wbg_strokeRect_74c74060d04c703b: function(arg0, arg1, arg2, arg3, arg4) {
-            arg0.strokeRect(arg1, arg2, arg3, arg4);
-        },
-        __wbg_stroke_cf809e69aae41b03: function(arg0) {
-            arg0.stroke();
-        },
-        __wbg_translate_d2b84d406c25580d: function() { return handleError(function (arg0, arg1, arg2) {
-            arg0.translate(arg1, arg2);
-        }, arguments); },
-        __wbg_width_6d9315ecc7140ff6: function(arg0) {
-            const ret = arg0.width;
-            return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
