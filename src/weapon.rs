@@ -34,5 +34,14 @@ impl WeaponType {
             other => WeaponType::Other(other.to_string()),
         }
     }
+
+    #[inline]
+    pub fn to_db(&self) -> &str {
+        match self {
+            WeaponType::Beam => "beam",
+            WeaponType::Missile => "missile",
+            WeaponType::Other(s) => s,
+        }
+    }
 }
 

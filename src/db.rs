@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use fxhash::FxHashMap;
-use rusqlite::{Connection, OpenFlags, Row};
+use rusqlite::{params, Connection, OpenFlags, Row};
 use std::path::Path;
 
 use crate::ship::Ship;
@@ -145,5 +145,98 @@ fn ship_from_row(row: &Row) -> rusqlite::Result<Ship> {
         weapons: Vec::new(),
         character: None,
     })
+}
+
+const SCHEMA: &str = "\
+CREATE TABLE IF NOT EXISTS ships (
+    dbref INTEGER PRIMARY KEY,
+    name TEXT, category TEXT, art TEXT, class TEXT, sensor_class TEXT, type TEXT,
+    crew REAL, crew_tuned INTEGER, quota INTEGER, cost INTEGER,
+    structure REAL, repair REAL, mass INTEGER, bay INTEGER, cargo INTEGER,
+    has_land INTEGER, has_dock INTEGER, can_land INTEGER, can_dock INTEGER,
+    firing REAL, fuel_eff REAL, stealth REAL, cloak_eff REAL, sensors REAL,
+    aux_max REAL, main_max REAL, armor REAL, fuel_max REAL,
+    lrs INTEGER, srs INTEGER, ew INTEGER, trans INTEGER, tractor INTEGER,
+    has_cloak INTEGER, cloak REAL,
+    main REAL, aux REAL, batt REAL, move_ratio REAL,
+    warp_cruise REAL, warp_emer REAL, warp_max REAL,
+    warp_cruise_cost REAL, warp_emer_cost REAL, warp_max_cost REAL, warp_type TEXT,
+    imp_cruise REAL, imp_emer REAL, imp_max REAL,
+    imp_cruise_cost REAL, imp_emer_cost REAL, imp_max_cost REAL,
+    shield_max REAL, shield_ratio REAL,
+    shield_def_1x REAL, shield_def_2x REAL, shield_def_3x REAL, shield_def_4x REAL,
+    shield_cost_1x REAL, shield_cost_2x REAL, shield_cost_3x REAL, shield_cost_4x REAL,
+    beams_count INTEGER, beams_dps REAL, missiles_count INTEGER, missiles_dps REAL,
+    source_log TEXT, source_line INTEGER, parsed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS weapons (
+    dbref INTEGER, weapon_type TEXT, slot INTEGER,
+    cost REAL, range REAL, arc TEXT, damage REAL, time REAL, dps REAL,
+    PRIMARY KEY (dbref, weapon_type, slot),
+    FOREIGN KEY (dbref) REFERENCES ships(dbref) ON DELETE CASCADE
+);";
+
+const SHIP_COLUMNS: &str = "dbref, name, category, art, class, sensor_class, type, crew, \
+    crew_tuned, quota, cost, structure, repair, mass, bay, cargo, has_land, has_dock, can_land, \
+    can_dock, firing, fuel_eff, stealth, cloak_eff, sensors, aux_max, main_max, armor, fuel_max, \
+    lrs, srs, ew, trans, tractor, has_cloak, cloak, main, aux, batt, move_ratio, warp_cruise, \
+    warp_emer, warp_max, warp_cruise_cost, warp_emer_cost, warp_max_cost, warp_type, imp_cruise, \
+    imp_emer, imp_max, imp_cruise_cost, imp_emer_cost, imp_max_cost, shield_max, shield_ratio, \
+    shield_def_1x, shield_def_2x, shield_def_3x, shield_def_4x, shield_cost_1x, shield_cost_2x, \
+    shield_cost_3x, shield_cost_4x, beams_count, beams_dps, missiles_count, missiles_dps, \
+    source_log, source_line, parsed_at";
+
+const SHIP_COL_COUNT: usize = 70;
+
+/// Create the schema if absent and upsert every ship (and its weapons) by dbref
+pub fn save_ships(ships: &[Ship], path: impl AsRef<Path>) -> Result<()> {
+    let path = path.as_ref();
+    let mut conn = Connection::open(path)
+        .with_context(|| format!("opening {} for writing", path.display()))?;
+    conn.execute_batch(SCHEMA)?;
+
+    let placeholders = vec!["?"; SHIP_COL_COUNT].join(", ");
+    let insert_ship = format!("INSERT OR REPLACE INTO ships ({SHIP_COLUMNS}) VALUES ({placeholders})");
+
+    let tx = conn.transaction()?;
+    {
+        let mut ship_stmt = tx.prepare(&insert_ship)?;
+        let mut del_weapons = tx.prepare("DELETE FROM weapons WHERE dbref = ?1")?;
+        let mut ins_weapon = tx.prepare(
+            "INSERT OR REPLACE INTO weapons \
+             (dbref, weapon_type, slot, cost, range, arc, damage, time, dps) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        )?;
+        for s in ships {
+            ship_stmt.execute(params![
+                s.dbref, s.name, s.category, s.art, s.class, s.sensor_class, s.ship_type,
+                s.crew, s.crew_tuned, s.quota, s.cost,
+                s.structure, s.repair, s.mass, s.bay, s.cargo,
+                s.has_land, s.has_dock, s.can_land, s.can_dock,
+                s.firing, s.fuel_eff, s.stealth, s.cloak_eff, s.sensors, s.aux_max, s.main_max,
+                s.armor, s.fuel_max,
+                s.lrs, s.srs, s.ew, s.trans, s.tractor, s.has_cloak, s.cloak,
+                s.main, s.aux, s.batt, s.move_ratio,
+                s.warp_cruise, s.warp_emer, s.warp_max,
+                s.warp_cruise_cost, s.warp_emer_cost, s.warp_max_cost, s.warp_type,
+                s.imp_cruise, s.imp_emer, s.imp_max,
+                s.imp_cruise_cost, s.imp_emer_cost, s.imp_max_cost,
+                s.shield_max, s.shield_ratio,
+                s.shield_def_1x, s.shield_def_2x, s.shield_def_3x, s.shield_def_4x,
+                s.shield_cost_1x, s.shield_cost_2x, s.shield_cost_3x, s.shield_cost_4x,
+                s.beams_count, s.beams_dps, s.missiles_count, s.missiles_dps,
+                s.source_log, s.source_line, s.parsed_at,
+            ])?;
+            del_weapons.execute(params![s.dbref])?;
+            for w in &s.weapons {
+                ins_weapon.execute(params![
+                    s.dbref, w.weapon_type.to_db(), w.slot, w.cost, w.range, w.arc,
+                    w.damage, w.recycle_time, w.dps
+                ])?;
+            }
+        }
+    }
+    tx.commit()?;
+    Ok(())
 }
 

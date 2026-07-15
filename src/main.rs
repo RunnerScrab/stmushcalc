@@ -1,15 +1,21 @@
 //! Usage:  shipdb <name>[,<name>...] [path/to/ships.db]
 //!             [--eng N --tac N --helm N --oper N --sci N --dam N --wis N]
 //!
+//! To build the ship database from a @listspecs log instead of plotting:
+//!     shipdb --parse listspecs.log [--sqlite | --bincode]
+//!
+//! Writes the default catalog file (ships.db, or ships.bin with --bincode),
+//! creating it if absent and upserting ships by dbref if it already exists.
+//!
 //! Each name matches the first ship (in dbref order) whose name contains it,
-//! case-insensitively. Passing a list of ships separated by comma will produce
+//! case-insensitive. Passing a list of ships separated by comma will produce
 //! a single plot with the cumulative damage of each ship in the list. Passing
-//! one ship will output its damage signal in time domain
+//! one ship will output its damage pulse train in time domain
 //!
 //! You can pass con skills to simulate ship tuning; they default to 0 bonus, i.e.
-//! giving untuned base ship specs for those in that console's domain
+//! giving untuned base ship specs for those in that console's domain, 10 wisdom
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use compact_str::CompactString;
 use fxhash::FxHashMap;
 use plotters::prelude::*;
@@ -72,10 +78,54 @@ fn plot_inst_damage_signal(sig: &DamageSignal, ship: &shipdb::Ship, fmt: ImgFmt)
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+enum OutFmt {
+    Sqlite,
+    Bincode,
+}
+
+const DEFAULT_BINNAME: &str = "ships.bin";
+
+/// Parse a @listspecs log into the default database file, creating it if absent
+/// and upserting by dbref if it already exists
+fn run_parse(log_path: &str, fmt: OutFmt) -> Result<()> {
+    let text = std::fs::read_to_string(log_path)
+        .with_context(|| format!("reading log {log_path}"))?;
+    let parsed = shipdb::logparse::parse_logs(&text);
+    if parsed.is_empty() {
+        bail!("no ships parsed from {log_path}");
+    }
+
+    match fmt {
+        OutFmt::Sqlite => {
+            shipdb::save_ships(&parsed, DEFAULT_DBNAME)?;
+            println!("parsed {} ships into {DEFAULT_DBNAME}", parsed.len());
+        }
+        OutFmt::Bincode => {
+            let mut by_dbref: std::collections::BTreeMap<i64, shipdb::Ship> =
+                std::collections::BTreeMap::new();
+            if std::path::Path::new(DEFAULT_BINNAME).exists() {
+                for s in shipdb::load_snapshot(DEFAULT_BINNAME)? {
+                    by_dbref.insert(s.dbref, s);
+                }
+            }
+            for s in parsed {
+                by_dbref.insert(s.dbref, s);
+            }
+            let merged: Vec<shipdb::Ship> = by_dbref.into_values().collect();
+            shipdb::save_snapshot(&merged, DEFAULT_BINNAME)?;
+            println!("parsed into {DEFAULT_BINNAME} ({} ships total)", merged.len());
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let mut arguments: SmallVec<[CompactString; 8]> = SmallVec::new();
     let mut flags: FxHashMap<String, f64> = FxHashMap::default();
     let mut fmt = ImgFmt::Svg;
+    let mut parse_log: Option<String> = None;
+    let mut out_fmt = OutFmt::Sqlite;
     let mut it = env::args().skip(1);
 
     while let Some(a) = it.next() {
@@ -89,6 +139,21 @@ fn main() -> Result<()> {
                     fmt = ImgFmt::Svg;
                     continue;
                 }
+                "sqlite" => {
+                    out_fmt = OutFmt::Sqlite;
+                    continue;
+                }
+                "bincode" => {
+                    out_fmt = OutFmt::Bincode;
+                    continue;
+                }
+                "parse" => {
+                    let Some(log) = it.next() else {
+                        bail!("--parse needs a log file path");
+                    };
+                    parse_log = Some(log);
+                    continue;
+                }
                 _ => {}
             }
             let Some(val) = it.next().and_then(|v| v.parse::<f64>().ok()) else {
@@ -98,6 +163,10 @@ fn main() -> Result<()> {
         } else {
             arguments.push(a.into());
         }
+    }
+
+    if let Some(log) = parse_log {
+        return run_parse(&log, out_fmt);
     }
 
     let Some(query) = arguments.first() else {
@@ -222,6 +291,9 @@ fn report_single(ship: &shipdb::Ship, tuned: bool, fmt: ImgFmt) -> Result<()> {
         let rotation: String = sig.rotation.iter().map(|f| f.label()).collect();
         let total = sig.total;
         let peak = sig.peak;
+
+        // We no longer actually sample a damage signal, but use a sparse, line-segment
+        // representation of instantaneous damage
         println!(
             "Simulated {:.0}s @ {:.1}s samples ({} shots), arc rotation [{}]:",
             HORIZON_SECS,

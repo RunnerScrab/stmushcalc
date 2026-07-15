@@ -14,7 +14,7 @@ mod weapon;
 pub use character::{is_transwarp, Character};
 pub use combat::{simulate_damage, DamageSignal, Face, Fire, SimConfig, TurnTimingModel};
 #[cfg(feature = "cli")]
-pub use db::{load_ships, open};
+pub use db::{load_ships, open, save_ships};
 pub use rng::TurnRng;
 pub use ship::Ship;
 pub use snapshot::{load_snapshot, save_snapshot, ships_from_bytes, ships_to_bytes};
