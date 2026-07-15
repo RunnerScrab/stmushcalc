@@ -210,7 +210,7 @@ button:hover {
   background: #2c2c31;
 }
 .summary {
-  font-family: ui-monospace;
+  font-family: monospace;
   white-space: pre-wrap;
   margin: 0 0 0.5rem;
   font-size: 0.72rem;
