@@ -21,7 +21,7 @@ pub use snapshot::{load_snapshot, save_snapshot, ships_from_bytes, ships_to_byte
 pub use weapon::{Weapon, WeaponType};
 
 /// Default simulation horizon, in seconds
-pub const DEFAULT_HORIZON_SECS: f64 = 400.0;
+pub const DEFAULT_HORIZON_SECS: f64 = 420.0;
 
 /// Default sample spacing, in seconds
 pub const DEFAULT_SAMPLE_DT: f64 = 0.1;

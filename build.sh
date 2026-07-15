@@ -4,16 +4,19 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$HOME/.cargo/bin:$PATH"
 
-( cd shipdb-wasm && wasm-pack build --target web --release )
+( cd wasm && wasm-pack build --target web --release )
 
-cp shipdb-wasm/pkg/shipdb_wasm.js \
-   shipdb-wasm/pkg/shipdb_wasm_bg.wasm \
-   shipdb-wasm/pkg/shipdb_wasm.d.ts \
-   shipdb-wasm/pkg/shipdb_wasm_bg.wasm.d.ts \
+cp wasm/pkg/shipdb_wasm.js \
+   wasm/pkg/shipdb_wasm_bg.wasm \
+   wasm/pkg/shipdb_wasm.d.ts \
+   wasm/pkg/shipdb_wasm_bg.wasm.d.ts \
    docs/
-cp shipdb-wasm/www/favicon.ico docs/favicon.ico
+cp wasm/www/favicon.ico docs/favicon.ico
+cp wasm/www/largecombadge.png docs/largecombadge.png
 
-sed 's#\.\./pkg/#./#' shipdb-wasm/www/index.html > docs/index.html
+for f in index.html styles.css app.js data.js tuning.js shiplist.js storage.js panels.js url.js dock.js; do
+  sed 's#\.\./pkg/#./#' "wasm/www/$f" > "docs/$f"
+done
 
 echo "Built wasm and synced docs/"
 
