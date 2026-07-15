@@ -31,3 +31,4 @@ for (const el of [...inputs, timingEl]) {
 
 applyStateFromUrl();
 run();
+
