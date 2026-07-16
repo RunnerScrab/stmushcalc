@@ -114,6 +114,9 @@ impl Character {
         tuned.stealth = ship.stealth * (1.0 + 1.5 * helm);
 
         tuned.shield_max = (ship.shield_max * (1.0 + oper * 0.333_333)).round();
+        if ship.shield_max > 0.0 {
+            tuned.shield_ratio = ship.shield_ratio * (tuned.shield_max / ship.shield_max);
+        }
         tuned.armor = ship.armor * (1.0 + oper);
         tuned.cargo = (ship.cargo as f64 * (1.0 + oper)).round() as i64;
 
