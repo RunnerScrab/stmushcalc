@@ -299,6 +299,9 @@ pub fn ship_table(
     let turn_rate_sigma = TURN_TIME_SIGMA * turn_rate * turn_rate / 90.0;
     let beam_dps: f64 = tuned.weapons_of(&WeaponType::Beam).map(|w| w.dps).sum();
     let missile_dps: f64 = tuned.weapons_of(&WeaponType::Missile).map(|w| w.dps).sum();
+    let beam_cost: f64 = tuned.weapons_of(&WeaponType::Beam).map(|w| w.cost/w.recycle_time).sum();
+    let missile_cost: f64 = tuned.weapons_of(&WeaponType::Missile).map(|w| w.cost/w.recycle_time).sum();
+    let weap_tot_cost: f64 = beam_cost + missile_cost;
 
     // Thousands-separated integer
     fn add_commas(n: i64) -> String {
@@ -489,7 +492,11 @@ pub fn ship_table(
             + &stat(
                 "Nominal Total DPS",
                 &num("nominal_total_dps", beam_dps + missile_dps, &format!("{:.1}", beam_dps + missile_dps)),
-            )),
+            )
+            + &stat("Beam Cost", &lo("beam_cost", beam_cost, &format!("{beam_cost:.2} GW")))
+            + &stat("Missile Cost", &lo("missile_cost", missile_cost, &format!("{missile_cost:.2} GW")))
+            + &stat("Total Cost", &lo("weap_tot_cost", weap_tot_cost, &format!("{weap_tot_cost:.2} GW")))
+            ),
     );
 
     let weapon_table = |kind: &WeaponType| -> String {
