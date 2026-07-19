@@ -406,6 +406,7 @@ pub fn ship_table(
 
     let main_scaled = tuned.main * tuned.main_max / 100.0;
     let aux_scaled = tuned.aux * tuned.aux_max / 100.0;
+    let total_scaled_power = main_scaled + aux_scaled + tuned.batt;
     stats.push_str(&group(
         "Power &amp; Movement",
         &(stat("Main", &format!("{} ({main_scaled:.1})", num("main", tuned.main, &format!("{:.0}", tuned.main))))
@@ -485,6 +486,7 @@ pub fn ship_table(
             + &stat("4x Cost", &shield_row("shield_cost_4x", "shield_def_4x", tuned.shield_cost_4x, tuned.shield_def_4x))),
     ));
 
+    let weap_percentage = weap_tot_cost/total_scaled_power * 100.0;
     let weapons_summary = group(
         "Weapons",
         &(stat("Nominal Beam DPS", &num("nominal_beam_dps", beam_dps, &format!("{beam_dps:.1}")))
@@ -495,7 +497,9 @@ pub fn ship_table(
             )
             + &stat("Beam Cost", &lo("beam_cost", beam_cost, &format!("{beam_cost:.2} GW")))
             + &stat("Missile Cost", &lo("missile_cost", missile_cost, &format!("{missile_cost:.2} GW")))
-            + &stat("Total Cost", &lo("weap_tot_cost", weap_tot_cost, &format!("{weap_tot_cost:.2} GW")))
+            + &stat("Total Cost", &format!("{} ({})", &lo("weap_tot_cost",
+                        weap_tot_cost, &format!("{weap_tot_cost:.2} GW")),
+                        &lo("weap_pow_frac", weap_percentage, &format!("{weap_percentage:.2}%"))))
             ),
     );
 
