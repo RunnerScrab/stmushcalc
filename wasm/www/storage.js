@@ -39,7 +39,7 @@ async function ingestFiles(files) {
   if (!files.length) return;
   let added = 0;
   for (const file of files) {
-    added += add_ships_from_log(await file.text()).length;
+    added += add_ships_from_log(file.name, await file.bytes()).length;
   }
   if (added) persistUploaded();
   populateAvailable();

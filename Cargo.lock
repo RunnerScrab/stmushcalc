@@ -1075,6 +1075,7 @@ dependencies = [
  "bincode",
  "compact_str",
  "criterion",
+ "flate2",
  "fxhash",
  "memchr",
  "plotters",
@@ -1090,6 +1091,7 @@ name = "shipdb-wasm"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "flate2",
  "plotters",
  "shipdb",
  "wasm-bindgen",

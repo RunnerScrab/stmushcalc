@@ -530,7 +530,7 @@ fn title_parts(inner: &str) -> (Option<String>, String) {
     (None, inner.trim().to_string())
 }
 
-pub fn parse_logs(text: &str) -> Vec<Ship> {
+pub fn parse_logs(text: &[u8]) -> Vec<Ship> {
     let mut ships = Vec::with_capacity(64);
     let mut block: Option<ShipSpecBlock> = None;
 
@@ -544,7 +544,7 @@ pub fn parse_logs(text: &str) -> Vec<Ship> {
     };
 
     // Break the log file text into lines
-    for line in get_lines_memchr(text.as_bytes()) {
+    for line in get_lines_memchr(text) {
         if line.trim_start().starts_with('~') {
             if let Some(m) = TITLE_RE.captures(line.trim()) {
                 finish_ship(block.take(), &mut ships);
@@ -750,7 +750,7 @@ mod tests {
 
     #[test]
     fn parses_specs_correctly() {
-        let ships = parse_logs(REFLEX);
+        let ships = parse_logs(REFLEX.as_bytes());
         assert_eq!(ships.len(), 1);
         let s = &ships[0];
         assert_eq!(s.dbref, 5367);
