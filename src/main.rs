@@ -91,7 +91,7 @@ const DEFAULT_BINNAME: &str = "ships.bin";
 fn run_parse(log_path: &str, fmt: OutFmt) -> Result<()> {
     let text = std::fs::read_to_string(log_path)
         .with_context(|| format!("reading log {log_path}"))?;
-    let parsed = shipdb::logparse::parse_logs(&text);
+    let parsed = shipdb::logparse::parse_logs(text.as_bytes());
     if parsed.is_empty() {
         bail!("no ships parsed from {log_path}");
     }

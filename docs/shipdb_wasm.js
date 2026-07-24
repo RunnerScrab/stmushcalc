@@ -2,16 +2,19 @@
 
 /**
  * Scrape @listspecs output from loaded logs and cache them locally
- * @param {string} text
+ * @param {string} filename
+ * @param {Uint8Array} text
  * @returns {string[]}
  */
-export function add_ships_from_log(text) {
-    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+export function add_ships_from_log(filename, text) {
+    const ptr0 = passStringToWasm0(filename, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.add_ships_from_log(ptr0, len0);
-    var v2 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+    const ptr1 = passArray8ToWasm0(text, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.add_ships_from_log(ptr0, len0, ptr1, len1);
+    var v3 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-    return v2;
+    return v3;
 }
 
 /**

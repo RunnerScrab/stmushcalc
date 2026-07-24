@@ -1,8 +1,12 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::io::Read;
 use std::rc::Rc;
 use std::sync::OnceLock;
 
+use flate2::Decompress;
+
+use flate2::bufread::MultiGzDecoder;
 use plotters::coord::Shift;
 use plotters::prelude::{DrawingArea, IntoDrawingArea, RGBColor};
 use plotters::backend::SVGBackend;
@@ -213,8 +217,19 @@ fn add_ships(incoming: impl IntoIterator<Item = Ship>) -> Vec<String> {
 
 /// Scrape @listspecs output from loaded logs and cache them locally
 #[wasm_bindgen]
-pub fn add_ships_from_log(text: &str) -> Vec<String> {
-    add_ships(shipdb::logparse::parse_logs(text))
+pub fn add_ships_from_log(filename: &str, text: &[u8]) -> Vec<String> {
+    if filename.contains(".gz") {
+        let mut gz = MultiGzDecoder::new(text);
+        let mut decomped: String = String::with_capacity(text.len());
+        
+        if gz.read_to_string(&mut decomped).is_ok() {
+            add_ships(shipdb::logparse::parse_logs(decomped.as_bytes()))
+        } else {
+            Vec::<String>::new()
+        }
+    } else {
+        add_ships(shipdb::logparse::parse_logs(text))
+    }
 }
 
 /// Bincode snapshot of this session's uploaded ships, art re-attached
