@@ -359,7 +359,7 @@ pub fn ship_table(
         format!("{} (cost {})", num(ks, speed, &format!("{speed:.3}")), lo(kc, c, &format!("{c:.2}")))
     };
     let shield_row = |kc: &str, kd: &str, cost: f64, def: f64| {
-        format!("{} (Defense {})", lo(kc, cost, &format!("{cost:.0}")), num(kd, def, &format!("{def:.1}")))
+        format!("{} ({})", lo(kc, cost, &format!("{cost:.0}")), num(kd, def, &format!("{def:.2}%")))
     };
 
     let mut stats = String::new();

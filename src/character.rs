@@ -73,6 +73,25 @@ impl Character {
         self.bonus(self.damage_control)
     }
 
+    #[inline(always)]
+    pub fn tuned_shield_max(base_shield_max: f64, tuned_oper: f64) -> f64 {
+        (base_shield_max * (1.0 + (tuned_oper/3.0))).round()
+    }
+
+    #[inline(always)]
+    fn shield_dissipation(cost1x: f64, shield_mult: u32, base_shield_ratio: f64) -> f64 {
+        let shield_out = cost1x * base_shield_ratio;
+        let thiscost = cost1x * (shield_mult as f64);
+        let offset = 2.0;
+        let exp = 1.0 - thiscost * 4.0_f64/shield_out;
+        ((offset - 2.0_f64.powf(exp))*shield_out)/100.0
+    }
+
+    #[inline(always)]
+    fn shield_percent(dis: f64) -> f64 {
+        1.0 - (1.0 / (dis * 100.0))
+    }
+
     /// Apply this character's tunings to ship, returning the tuned copy
     pub fn tune_ship(&self, ship: &Ship) -> Ship {
         let eng = self.engineering_bonus();
@@ -113,9 +132,21 @@ impl Character {
         tuned.move_ratio = round_down(ship.move_ratio / (1.0 + helm), 7);
         tuned.stealth = ship.stealth * (1.0 + 1.5 * helm);
 
-        tuned.shield_max = (ship.shield_max * (1.0 + oper * 0.333_333)).round();
+        tuned.shield_max = Self::tuned_shield_max(ship.shield_max, oper);
         if ship.shield_max > 0.0 {
             tuned.shield_ratio = ship.shield_ratio * (tuned.shield_max / ship.shield_max);
+            let cost1x: f64 = tuned.shield_max / tuned.shield_ratio;
+            let dis: [f64; 4] = [
+                Self::shield_dissipation(cost1x, 1, tuned.shield_ratio),
+                Self::shield_dissipation(cost1x, 2, tuned.shield_ratio),
+                Self::shield_dissipation(cost1x, 3, tuned.shield_ratio),
+                Self::shield_dissipation(cost1x, 4, tuned.shield_ratio),
+            ];
+
+            tuned.shield_def_1x = Self::shield_percent(dis[0]) * 100.0;
+            tuned.shield_def_2x = Self::shield_percent(dis[1]) * 100.0;
+            tuned.shield_def_3x = Self::shield_percent(dis[2]) * 100.0;
+            tuned.shield_def_4x = Self::shield_percent(dis[3]) * 100.0;
         }
         tuned.armor = ship.armor * (1.0 + oper);
         tuned.cargo = (ship.cargo as f64 * (1.0 + oper)).round() as i64;
