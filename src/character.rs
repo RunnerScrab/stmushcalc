@@ -74,8 +74,8 @@ impl Character {
     }
 
     #[inline(always)]
-    pub fn tuned_shield_max(base_shield_max: f64, tuned_oper: f64) -> f64 {
-        (base_shield_max * (1.0 + (tuned_oper/3.0))).round()
+    pub fn tuned_shield_max(tuned_shield_max: f64, tuned_oper: f64) -> f64 {
+        (tuned_shield_max * (1.0 + (tuned_oper/3.0))).round()
     }
 
     #[inline(always)]
