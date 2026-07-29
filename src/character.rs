@@ -101,9 +101,8 @@ impl Character {
         tuned.fuel_eff = ship.fuel_eff * (1.0 + 3.0 * eng);
 
         let factor = warp_interp_factor(eng);
-        let bump = if is_transwarp(ship) { 8.0 } else { 0.0 };
         if let Some(base_max) = ship.warp_max {
-            let (cruise, emer, max) = tuned_warp(ship.warp_cruise, ship.warp_emer, base_max, factor, bump);
+            let (cruise, emer, max) = tuned_warp(ship.warp_cruise, ship.warp_emer, base_max, factor, 0.0);
             tuned.warp_cruise = cruise;
             tuned.warp_emer = emer;
             tuned.warp_max = Some(max);
