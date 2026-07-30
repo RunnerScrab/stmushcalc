@@ -440,7 +440,7 @@ pub fn simulate_damage(ship: &Ship, rng: &mut TurnRng, cfg: &SimConfig) -> Damag
 
         let mut this_turn = 0.0;
         let arrival = if face != orientation {
-            let turn = ship.draw_turn_time(rng, orientation.angle_to(face));
+            let turn = ship.calc_turn_time(orientation.angle_to(face));
             this_turn = turn;
             orientation = face;
             arrival_time(cfg.turn_timing, t, turn, ready)

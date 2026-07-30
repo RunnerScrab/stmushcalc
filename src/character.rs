@@ -84,6 +84,11 @@ impl Character {
         100.0 - 100.0/(base_shield_max * SCALE[(level - 1).min(3).max(0)])
     }
 
+    #[inline(always)]
+    pub fn imp_power(move_ratio: f64, impulse: f64) -> f64 {
+        (90.0 * move_ratio) / (100.0 - (impulse * 100.0))
+    }
+
     /// Apply this character's tunings to ship, returning the tuned copy
     pub fn tune_ship(&self, ship: &Ship) -> Ship {
         let eng = self.engineering_bonus();
@@ -94,6 +99,8 @@ impl Character {
         let dam = self.damage_control_bonus();
 
         let mut tuned = ship.clone();
+
+        tuned.move_ratio = round_down(ship.move_ratio / (1.0 + helm), 7);
 
         tuned.main_max = ship.main_max * (1.0 + eng);
         tuned.aux_max = ship.aux_max * (1.0 + eng);
@@ -113,6 +120,10 @@ impl Character {
         tuned.imp_emer = ship.imp_emer + r * (1.0 - ship.imp_emer);
         tuned.imp_max = ship.imp_max + r * (1.0 - ship.imp_max);
 
+        tuned.imp_cruise_cost = Self::imp_power(tuned.move_ratio, tuned.imp_cruise);
+        tuned.imp_emer_cost = Self::imp_power(tuned.move_ratio, tuned.imp_emer);
+        tuned.imp_max_cost = Self::imp_power(tuned.move_ratio, tuned.imp_max);
+
         for w in &mut tuned.weapons {
             if w.recycle_time > 0.0 {
                 w.recycle_time /= 1.0 + tact;
@@ -120,7 +131,6 @@ impl Character {
             }
         }
 
-        tuned.move_ratio = round_down(ship.move_ratio / (1.0 + helm), 7);
         tuned.stealth = ship.stealth * (1.0 + 1.5 * helm);
 
         tuned.shield_max = Self::tuned_shield_max(ship.shield_max, oper);

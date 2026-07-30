@@ -4,8 +4,6 @@ use std::io::Read;
 use std::rc::Rc;
 use std::sync::OnceLock;
 
-use flate2::Decompress;
-
 use flate2::bufread::MultiGzDecoder;
 use plotters::coord::Shift;
 use plotters::prelude::{DrawingArea, IntoDrawingArea, RGBColor};
@@ -310,8 +308,6 @@ pub fn ship_table(
     let turn_rate = tuned.turn_rate();
     let turn_90 = 90.0 / turn_rate;
 
-    const TURN_TIME_SIGMA: f64 = 0.08;
-    let turn_rate_sigma = TURN_TIME_SIGMA * turn_rate * turn_rate / 90.0;
     let beam_dps: f64 = tuned.weapons_of(&WeaponType::Beam).map(|w| w.dps).sum();
     let missile_dps: f64 = tuned.weapons_of(&WeaponType::Missile).map(|w| w.dps).sum();
     let beam_cost: f64 = tuned.weapons_of(&WeaponType::Beam).map(|w| w.cost/w.recycle_time).sum();
@@ -428,8 +424,8 @@ pub fn ship_table(
             + &stat("Aux", &format!("{} ({aux_scaled:.1})", num("aux", tuned.aux, &format!("{:.0}", tuned.aux))))
             + &stat("Batt", &num("batt", tuned.batt, &format!("{:.1}", tuned.batt)))
             + &stat("MoveRatio", &lo("move_ratio", tuned.move_ratio, &format!("{:.2}", tuned.move_ratio)))
-            + &stat("Turn rate", &num("turn_rate", turn_rate, &format!("{turn_rate:.2} &plusmn; {turn_rate_sigma:.2} deg/s")))
-            + &stat("90&deg; turn", &lo("turn_90", turn_90, &format!("{turn_90:.2} &plusmn; {TURN_TIME_SIGMA:.2} s")))),
+            + &stat("Turn rate", &num("turn_rate", turn_rate, &format!("{turn_rate:.2} deg/s")))
+            + &stat("90&deg; turn", &lo("turn_90", turn_90, &format!("{turn_90:.2} s")))),
     ));
 
     let warp = match (tuned.warp_cruise, tuned.warp_emer, tuned.warp_max) {

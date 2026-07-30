@@ -151,19 +151,22 @@ impl Ship {
 
     #[inline]
     pub fn turn_rate(&self) -> f64 {
-        // In degrees, without noise
-        308.6 / (self.move_ratio + 5.38)
+        // In degrees
+        297.0/(self.move_ratio + 4.85)
     }
 
     /// ang_deg * (mr + 5.38) / 308.6 plus Gaussian uncertainty 
     /// that was present at the time observations were made 
-    pub fn draw_turn_time(&self, rng: &mut TurnRng, ang_deg: f64) -> f64 {
+    pub fn calc_turn_time(&self, ang_deg: f64) -> f64 {
 
         // Observed SIGMA may be smaller or larger depending on server load, network conditions, etc.
-        const SIGMA: f64 = 0.08; 
-        let mr = self.move_ratio;
-        let noise = rng.next_gaussian(0.0, SIGMA);
-        ang_deg * (mr + 5.38) / 308.6 + noise
+        // const SIGMA: f64 = 0.08; 
+        // let mr = self.move_ratio;
+        // let noise = rng.next_gaussian(0.0, SIGMA);
+        // ang_deg * (mr + 5.38) / 308.6 + noise
+        // We now know the exact turn rate equation so don't need to add noise
+        ang_deg * (self.move_ratio + 4.85) / 297.0
+
     }
 }
 
